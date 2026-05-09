@@ -2,7 +2,7 @@
 
 # peekr
 
-**cProfile for AI agents.**
+**Agents are black boxes. Peekr makes them transparent.**
 
 [![PyPI](https://img.shields.io/pypi/v/peekr)](https://pypi.org/project/peekr/)
 [![CI](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml)
