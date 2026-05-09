@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>peekr — Observability for AI agents</title>
-  <meta name="description" content="Agents are black boxes. Peekr makes them transparent. Auto-instruments OpenAI and Anthropic with 2 lines of code." />
+  <title>peekr — cProfile for AI agents</title>
+  <meta name="description" content="cProfile tells you where CPU time went. Peekr tells you where time, tokens, and money went in your AI agent — and what each step actually saw and returned." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -104,8 +104,8 @@
 
 <section class="hero">
   <div class="badge">Open Source · MIT · Free forever</div>
-  <h1>Agents are black boxes.<br /><em>Peekr makes them transparent.</em></h1>
-  <p class="hero-sub">Auto-instruments OpenAI and Anthropic. Every LLM call, tool invocation, token count, and error — recorded as a tree you can inspect.</p>
+  <h1><em>cProfile</em> for<br />AI agents.</h1>
+  <p class="hero-sub">cProfile tells you where CPU time went. Peekr tells you where time, tokens, and money went — and what each step actually saw and returned.</p>
   <div class="cta-group">
     <a href="docs.html" class="btn btn-primary">Read the docs</a>
     <a href="https://github.com/ashwanijha04/peekr" class="btn btn-secondary">View on GitHub</a>
@@ -118,8 +118,8 @@
 
 <section class="pain">
   <div class="pain-intro">
-    <h2>Four problems peekr solves</h2>
-    <p>Every agent developer hits these walls. Peekr turns guesswork into evidence.</p>
+    <h2>A profiler for every layer of your agent</h2>
+    <p>CPU profilers only see timing. Agents fail for reasons that have nothing to do with performance.</p>
   </div>
 
   <div class="scenario">
@@ -179,7 +179,7 @@
 </section>
 
 <section class="demo">
-  <h2>Two lines. No config.</h2>
+  <h2>Add it like a profiler. Remove it like a profiler.</h2>
   <div class="code-card">
     <div class="code-card-header"><div class="dot"></div><div class="dot"></div><div class="dot"></div> agent.py</div>
     <pre><span class="kw">import</span> peekr
@@ -202,7 +202,7 @@ openai.chat.completions.<span class="fn">create</span>(
 </section>
 
 <section class="features">
-  <h2>Built for developers</h2>
+  <h2>Beyond what a profiler can see</h2>
   <div class="feature-grid">
     <div class="feature-card"><div class="feature-icon">⚡</div><h3>Zero config</h3><p>One call patches OpenAI and Anthropic. No wrappers, no accounts, nothing to deploy.</p></div>
     <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via <code>ContextVar</code>. Works across async without manual passing.</p></div>

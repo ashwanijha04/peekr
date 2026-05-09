@@ -2,7 +2,7 @@
 
 # peekr
 
-**Agents are black boxes. Peekr makes them transparent.**
+**cProfile for AI agents.**
 
 [![PyPI](https://img.shields.io/pypi/v/peekr)](https://pypi.org/project/peekr/)
 [![CI](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml)
@@ -15,9 +15,22 @@
 
 ---
 
-When your agent gives a wrong answer, you have no idea why. Was the prompt malformed? Did a tool return bad data? Did the LLM hallucinate? Without observability, you're guessing.
+`cProfile` tells you where CPU time went in your Python code. Peekr tells you where time, tokens, and money went in your agent — and what each step actually saw and returned.
 
-Peekr records every LLM call, every tool invocation, every token, and every error — as a tree you can inspect. Two lines to add, no backend required.
+```
+# cProfile
+function           calls   cumtime
+search_results     1       3.8s
+openai.create      2       0.9s
+
+# peekr
+tool.search_web    3800ms          ← same bottleneck, now you can fix it
+openai.chat        490ms  891tok   ← plus token cost you'd never see in cProfile
+```
+
+But agents fail for reasons a profiler can't catch: a tool returned `null`, the LLM received a malformed prompt, history grew until it pushed the system prompt out of the context window. Peekr captures the **semantics** — inputs, outputs, LLM context — not just timing.
+
+Two lines to add, no backend required.
 
 ```bash
 pip install peekr
@@ -101,7 +114,9 @@ Now you can see exactly what happened — what went in, what came out, how long 
 
 ---
 
-## What it helps you debug
+## What it profiles
+
+A CPU profiler tells you a function was slow. Peekr tells you a function was slow, returned bad data, and passed it to an LLM that had no idea.
 
 > **Full examples with annotated traces → [docs](https://ashwanijha04.github.io/peekr/docs.html)**
 
