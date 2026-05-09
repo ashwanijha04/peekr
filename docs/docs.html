@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs — peekr</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+      --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+      --accent: #58a6ff; --green: #3fb950; --purple: #bc8cff;
+      --orange: #ffa657; --red: #f85149;
+    }
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.7; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+    .nav-logo { font-weight: 800; font-size: 1.2rem; color: var(--text); letter-spacing: -0.02em; }
+    .nav-logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    .layout { display: grid; grid-template-columns: 220px 1fr; max-width: 1100px; margin: 0 auto; min-height: calc(100vh - 60px); }
+
+    /* Sidebar */
+    .sidebar { border-right: 1px solid var(--border); padding: 2rem 1.5rem; position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto; }
+    .sidebar-section { margin-bottom: 1.75rem; }
+    .sidebar-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+    .sidebar a { display: block; font-size: 0.875rem; color: var(--muted); padding: 0.25rem 0; }
+    .sidebar a:hover { color: var(--text); text-decoration: none; }
+    .sidebar a.active { color: var(--accent); }
+
+    /* Content */
+    .content { padding: 3rem 3rem 5rem; max-width: 760px; }
+    .content h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+    .content h2 { font-size: 1.35rem; font-weight: 700; margin: 3rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .content h2:first-of-type { border-top: none; }
+    .content h3 { font-size: 1rem; font-weight: 700; margin: 2rem 0 0.75rem; color: var(--accent); }
+    .content p { color: #c9d1d9; margin-bottom: 1rem; font-size: 0.95rem; }
+    .content ul, .content ol { margin: 0 0 1rem 1.5rem; font-size: 0.95rem; color: #c9d1d9; }
+    .content li { margin-bottom: 0.3rem; }
+    .content code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.85em; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.4em; }
+    .content pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin: 1rem 0 1.5rem; }
+    .pre-header { padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--muted); font-family: "SFMono-Regular", Consolas, monospace; }
+    .content pre code { background: none; border: none; padding: 1.1rem; display: block; font-size: 0.85rem; line-height: 1.75; overflow-x: auto; }
+    .kw { color: var(--purple); } .fn { color: var(--accent); } .st { color: var(--orange); } .cm { color: var(--muted); font-style: italic; } .gr { color: var(--green); } .rd { color: var(--red); }
+
+    .callout { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1rem 0 1.5rem; font-size: 0.9rem; color: #c9d1d9; }
+    .callout.warn { border-left-color: var(--orange); }
+
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.875rem; }
+    th { text-align: left; padding: 0.6rem 1rem; background: var(--bg2); border: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 0.6rem 1rem; border: 1px solid var(--border); color: #c9d1d9; vertical-align: top; }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .content { padding: 2rem 1.5rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" style="text-decoration:none"><span class="nav-logo">peek<span>r</span></span></a>
+  <div class="nav-links">
+    <a href="docs.html" style="color: var(--text)">Docs</a>
+    <a href="https://github.com/ashwanijha04/peekr">GitHub</a>
+    <a href="https://pypi.org/project/peekr/">PyPI</a>
+  </div>
+</nav>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Getting started</div>
+      <a href="#install">Installation</a>
+      <a href="#quickstart">Quickstart</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Examples</div>
+      <a href="#debug-wrong-answer">Debug wrong answers</a>
+      <a href="#debug-slow">Find slow steps</a>
+      <a href="#debug-cost">Reduce token costs</a>
+      <a href="#debug-prod">Prod vs local bugs</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">API reference</div>
+      <a href="#instrument">instrument()</a>
+      <a href="#trace-decorator">@trace</a>
+      <a href="#manual-spans">Manual spans</a>
+      <a href="#cli">CLI viewer</a>
+      <a href="#exporters">Custom exporters</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reference</div>
+      <a href="#span-fields">Span fields</a>
+    </div>
+  </aside>
+
+  <main class="content">
+    <h1>Documentation</h1>
+    <p>Peekr records every LLM call, tool invocation, token count, and error as a tree you can inspect. This page covers everything from installation to advanced usage.</p>
+
+    <!-- INSTALL -->
+    <h2 id="install">Installation</h2>
+    <pre><div class="pre-header">terminal</div><code>pip install peekr                   <span class="cm"># base — no LLM SDK required</span>
+pip install "peekr[openai]"         <span class="cm"># with OpenAI</span>
+pip install "peekr[anthropic]"      <span class="cm"># with Anthropic</span>
+pip install "peekr[all]"            <span class="cm"># both</span></code></pre>
+    <p>Requires Python 3.9+. No accounts, no backend, no environment variables.</p>
+
+    <!-- QUICKSTART -->
+    <h2 id="quickstart">Quickstart</h2>
+    <p>Add two lines before your agent runs:</p>
+    <pre><div class="pre-header">agent.py</div><code><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>()
+
+<span class="kw">import</span> openai
+
+response = openai.chat.completions.<span class="fn">create</span>(
+    model=<span class="st">"gpt-4o"</span>,
+    messages=[{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Hello"</span>}]
+)</code></pre>
+    <p>Every LLM call is now traced automatically. Peekr writes to <code>traces.jsonl</code> and prints to the console.</p>
+    <p>View your traces:</p>
+    <pre><div class="pre-header">terminal</div><code>peekr view traces.jsonl          <span class="cm"># tree view</span>
+peekr view --io traces.jsonl     <span class="cm"># include inputs and outputs</span></code></pre>
+    <pre><div class="pre-header">output</div><code><span class="gr">Trace a3f2b1c0  843ms  312tok</span>
+────────────────────────────────────────────────
+<span class="fn">openai.chat.completions</span> [gpt-4o]  843ms  312tok</code></pre>
+
+    <!-- EXAMPLES -->
+    <h2 id="debug-wrong-answer">Example: Debug a wrong answer</h2>
+    <p>Your agent returns an incorrect response and you don't know why. Add <code>@trace</code> to your tool functions and run with <code>--io</code>:</p>
+    <pre><div class="pre-header">agent.py</div><code><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>()
+<span class="kw">from</span> peekr <span class="kw">import</span> trace
+
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">fetch_user</span>(user_id: int) -> dict:
+    <span class="kw">return</span> db.<span class="fn">get</span>(user_id)   <span class="cm"># returns None if not found</span>
+
+<span class="kw">@</span><span class="fn">trace</span>(name=<span class="st">"agent.run"</span>)
+<span class="kw">def</span> <span class="fn">run</span>(user_id: int):
+    user = <span class="fn">fetch_user</span>(user_id)
+    <span class="cm"># bug: no null check before passing to LLM</span>
+    <span class="kw">return</span> openai.chat.completions.<span class="fn">create</span>(
+        model=<span class="st">"gpt-4o"</span>,
+        messages=[{<span class="st">"role"</span>: <span class="st">"system"</span>, <span class="st">"content"</span>: <span class="fn">f</span><span class="st">"User: {user}"</span>}]
+    )</code></pre>
+    <pre><div class="pre-header">peekr view --io traces.jsonl</div><code><span class="fn">agent.run</span>  2100ms
+   └─ <span class="fn">tool.fetch_user</span>  12ms
+         in:  {"args": [42], "kwargs": {}}
+         out: <span class="rd">null</span>                     ← found it
+   └─ <span class="fn">openai.chat.completions</span> [gpt-4o]  2088ms
+         in:  [{"role": "system", "content": <span class="rd">"User: null..."</span>}]</code></pre>
+    <p>The LLM received <code>null</code> as the user object. The fix is a null check in <code>run()</code>, not a prompt change.</p>
+
+    <h2 id="debug-slow">Example: Find slow steps</h2>
+    <p>Wrap every step in your agent with <code>@trace</code> and look at the durations:</p>
+    <pre><div class="pre-header">agent.py</div><code><span class="kw">from</span> peekr <span class="kw">import</span> trace
+
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">search_web</span>(query: str) -> list: ...
+
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">rerank_results</span>(results: list) -> list: ...
+
+<span class="kw">@</span><span class="fn">trace</span>(name=<span class="st">"agent.run"</span>)
+<span class="kw">def</span> <span class="fn">run</span>(query: str):
+    results = <span class="fn">search_web</span>(query)
+    ranked  = <span class="fn">rerank_results</span>(results)
+    <span class="kw">return</span> openai.chat.completions.<span class="fn">create</span>(...)</code></pre>
+    <pre><div class="pre-header">peekr view traces.jsonl</div><code><span class="fn">agent.run</span>  4300ms
+   └─ <span class="fn">tool.search_web</span>    <span class="rd">3800ms</span>   ← 88% of time
+   └─ <span class="fn">tool.rerank_results</span>   18ms
+   └─ <span class="fn">openai.chat</span>          490ms</code></pre>
+    <p>Cache <code>search_web</code> results for repeated queries, or run it in parallel with other setup work. The LLM is not the bottleneck.</p>
+
+    <h2 id="debug-cost">Example: Reduce token costs</h2>
+    <p>Run your agent a few times on the same task and compare token counts across traces:</p>
+    <pre><div class="pre-header">terminal</div><code>peekr view traces.jsonl</code></pre>
+    <pre><div class="pre-header">output</div><code><span class="gr">Trace a3f2b1c0</span>  18,432 tokens
+<span class="gr">Trace b2e4c8f1</span>  21,104 tokens
+<span class="gr">Trace c5d9e2a7</span>  <span class="rd">24,891 tokens</span></code></pre>
+    <p>Token count growing each run is the signature of unbounded history — the agent appends every message to the next call. Fix: summarize or truncate the conversation after a fixed number of turns.</p>
+    <pre><div class="pre-header">agent.py</div><code><span class="cm"># Before: growing history</span>
+messages = conversation_history  <span class="cm"># gets longer every turn</span>
+
+<span class="cm"># After: summarize after 5 turns</span>
+<span class="kw">if</span> <span class="fn">len</span>(conversation_history) > <span class="fn">10</span>:  <span class="cm"># 5 exchanges = 10 messages</span>
+    summary = <span class="fn">summarize</span>(conversation_history)
+    messages = [{<span class="st">"role"</span>: <span class="st">"system"</span>, <span class="st">"content"</span>: summary}]</code></pre>
+
+    <h2 id="debug-prod">Example: Prod vs local bugs</h2>
+    <p>Your agent passes tests locally but fails in production. Capture traces in both environments and compare tool outputs:</p>
+    <pre><div class="pre-header">agent.py</div><code><span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">fetch_inventory</span>(sku: str) -> list:
+    <span class="kw">return</span> inventory_api.<span class="fn">get</span>(sku)</code></pre>
+    <pre><div class="pre-header">local trace</div><code><span class="fn">tool.fetch_inventory</span>  8ms
+   in:  {"sku": "ABC-123"}
+   out: [{"id": 1, "qty": 42}]   ← data present locally</code></pre>
+    <pre><div class="pre-header">prod trace</div><code><span class="fn">tool.fetch_inventory</span>  8ms
+   in:  {"sku": "ABC-123"}
+   out: <span class="rd">[]</span>                       ← empty in prod</code></pre>
+    <p>The agent logic is identical. The inventory API returns different data in prod — likely a missing data migration or environment-specific config. Fix the data source, not the agent.</p>
+
+    <!-- API REFERENCE -->
+    <h2 id="instrument">instrument()</h2>
+    <p>Call once, before any LLM calls. Patches the OpenAI and Anthropic SDKs.</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
+    console=<span class="kw">True</span>,                <span class="cm"># print spans live (default: True)</span>
+    jsonl_path=<span class="st">"traces.jsonl"</span>,   <span class="cm"># write to file (default: "traces.jsonl")</span>
+)</code></pre>
+    <table>
+      <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
+      <tr><td><code>console</code></td><td>bool</td><td>True</td><td>Print each span to stdout as it completes</td></tr>
+      <tr><td><code>jsonl_path</code></td><td>str | None</td><td>"traces.jsonl"</td><td>Path to write traces. Set to None to disable file output.</td></tr>
+    </table>
+
+    <h2 id="trace-decorator">@trace decorator</h2>
+    <p>Wraps a function as a span. Works on sync and async functions.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> trace
+
+<span class="cm"># Auto-names from module.function</span>
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">search_web</span>(query: str) -> list: ...
+
+<span class="cm"># Custom name</span>
+<span class="kw">@</span><span class="fn">trace</span>(name=<span class="st">"tool.search"</span>)
+<span class="kw">def</span> <span class="fn">search</span>(query: str) -> list: ...
+
+<span class="cm"># Opt out of capturing inputs/outputs (latency + status still recorded)</span>
+<span class="kw">@</span><span class="fn">trace</span>(capture_io=<span class="kw">False</span>)
+<span class="kw">def</span> <span class="fn">fetch_api_key</span>() -> str: ...
+
+<span class="cm"># Async</span>
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">async def</span> <span class="fn">fetch_user</span>(user_id: int) -> dict: ...</code></pre>
+    <table>
+      <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
+      <tr><td><code>name</code></td><td>str | None</td><td>module.function</td><td>Custom span name</td></tr>
+      <tr><td><code>capture_io</code></td><td>bool</td><td>True</td><td>Record function args and return value</td></tr>
+    </table>
+    <div class="callout warn">Inputs and outputs are serialized to JSON and truncated at 500 characters. Use <code>capture_io=False</code> for functions that handle secrets or large payloads.</div>
+
+    <h2 id="manual-spans">Manual spans</h2>
+    <p>For cases where a decorator doesn't fit — e.g. a loop, a context manager, or code you can't modify:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> start_span, end_span
+
+span, token = <span class="fn">start_span</span>(<span class="st">"my.operation"</span>)
+span.attributes[<span class="st">"custom_key"</span>] = <span class="st">"value"</span>
+<span class="kw">try</span>:
+    result = <span class="fn">do_work</span>()
+    span.status = <span class="st">"ok"</span>
+<span class="kw">except</span> Exception <span class="kw">as</span> e:
+    span.status = <span class="st">"error"</span>
+    span.attributes[<span class="st">"error"</span>] = <span class="fn">str</span>(e)
+    <span class="kw">raise</span>
+<span class="kw">finally</span>:
+    <span class="fn">end_span</span>(span, token)     <span class="cm"># always call — even on error</span></code></pre>
+    <div class="callout">Any spans started inside <code>do_work()</code> will automatically nest as children of this span.</div>
+
+    <h2 id="cli">CLI viewer</h2>
+    <pre><div class="pre-header">terminal</div><code>peekr view traces.jsonl          <span class="cm"># tree view</span>
+peekr view --io traces.jsonl     <span class="cm"># + inputs and outputs</span></code></pre>
+    <p>Each trace is shown as a tree grouped by <code>trace_id</code>. The <code>--io</code> flag prints up to 120 characters of the serialized input and output for each span.</p>
+
+    <h2 id="exporters">Custom exporters</h2>
+    <p>Any object with an <code>export(span)</code> method works as an exporter:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.exporters <span class="kw">import</span> add_exporter
+
+<span class="kw">class</span> <span class="fn">HttpExporter</span>:
+    <span class="kw">def</span> <span class="fn">export</span>(<span class="kw">self</span>, span):
+        requests.<span class="fn">post</span>(
+            <span class="st">"https://your-backend.com/spans"</span>,
+            json=span.<span class="fn">to_dict</span>()
+        )
+
+peekr.<span class="fn">instrument</span>()
+<span class="fn">add_exporter</span>(<span class="fn">HttpExporter</span>())</code></pre>
+    <p>Multiple exporters can be active at once. The built-in <code>JSONLExporter</code> and <code>ConsoleExporter</code> are added by <code>instrument()</code>. You can add your own on top.</p>
+
+    <!-- SPAN FIELDS -->
+    <h2 id="span-fields">Span fields</h2>
+    <p>Every span written to <code>traces.jsonl</code> is a JSON object with these fields:</p>
+    <table>
+      <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+      <tr><td><code>trace_id</code></td><td>string</td><td>Groups all spans in one agent run</td></tr>
+      <tr><td><code>span_id</code></td><td>string</td><td>Unique ID for this span</td></tr>
+      <tr><td><code>parent_id</code></td><td>string | null</td><td>ID of the parent span, or null for root</td></tr>
+      <tr><td><code>name</code></td><td>string</td><td>Span name</td></tr>
+      <tr><td><code>start_time</code></td><td>float</td><td>Unix timestamp</td></tr>
+      <tr><td><code>end_time</code></td><td>float</td><td>Unix timestamp</td></tr>
+      <tr><td><code>duration_ms</code></td><td>float</td><td>Wall-clock duration in milliseconds</td></tr>
+      <tr><td><code>status</code></td><td>"ok" | "error"</td><td>Whether the span succeeded</td></tr>
+      <tr><td><code>attributes.model</code></td><td>string</td><td>LLM model name (auto-captured)</td></tr>
+      <tr><td><code>attributes.tokens_input</code></td><td>int</td><td>Prompt tokens (auto-captured)</td></tr>
+      <tr><td><code>attributes.tokens_output</code></td><td>int</td><td>Completion tokens (auto-captured)</td></tr>
+      <tr><td><code>attributes.tokens_total</code></td><td>int</td><td>Total tokens (auto-captured)</td></tr>
+      <tr><td><code>attributes.input</code></td><td>string</td><td>Serialized function args (truncated)</td></tr>
+      <tr><td><code>attributes.output</code></td><td>string</td><td>Serialized return value (truncated)</td></tr>
+      <tr><td><code>attributes.error</code></td><td>string</td><td>Exception message if status is "error"</td></tr>
+    </table>
+  </main>
+</div>
+
+<footer style="border-top: 1px solid var(--border); padding: 2rem; text-align: center; font-size: 0.85rem; color: var(--muted);">
+  <p>MIT License · <a href="https://github.com/ashwanijha04/peekr" style="color: var(--muted)">GitHub</a> · <a href="https://pypi.org/project/peekr/" style="color: var(--muted)">PyPI</a></p>
+</footer>
+
+</body>
+</html>
