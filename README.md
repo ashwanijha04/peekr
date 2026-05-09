@@ -157,13 +157,41 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 
 ---
 
+## Supported clients
+
+| Provider | SDK | Install |
+|---|---|---|
+| **OpenAI** | `openai` | `pip install "peekr[openai]"` |
+| **Anthropic** | `anthropic` | `pip install "peekr[anthropic]"` |
+| **AWS Bedrock** | `boto3` | `pip install "peekr[bedrock]"` |
+
+All three auto-instrument with the same two lines — `peekr.instrument()` detects whichever SDKs are installed and patches them. Streaming is supported for all three.
+
+```python
+import peekr
+peekr.instrument()
+
+# OpenAI
+import openai
+openai.chat.completions.create(model="gpt-4o", messages=[...])
+
+# Anthropic
+import anthropic
+anthropic.Anthropic().messages.create(model="claude-opus-4-5", messages=[...])
+
+# Bedrock
+import boto3
+boto3.client("bedrock-runtime").converse(modelId="anthropic.claude-3-haiku-20240307-v1:0", messages=[...])
+```
+
 ## Installation
 
 ```bash
 pip install peekr                   # base
 pip install "peekr[openai]"         # with OpenAI
 pip install "peekr[anthropic]"      # with Anthropic
-pip install "peekr[all]"            # both
+pip install "peekr[bedrock]"        # with AWS Bedrock
+pip install "peekr[all]"            # everything
 ```
 
 ---

@@ -57,6 +57,17 @@
     .step p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
     .step code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.82em; color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px; }
 
+    /* Supported clients */
+    .clients { margin: 0 auto 1rem; text-align: center; }
+    .clients-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.25rem; }
+    .clients-row { display: flex; justify-content: center; align-items: stretch; gap: 1rem; flex-wrap: wrap; }
+    .client-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 2rem; display: flex; align-items: center; gap: 0.75rem; transition: border-color 0.15s; min-width: 180px; }
+    .client-card:hover { border-color: var(--accent); }
+    .client-logo { font-size: 1.5rem; flex-shrink: 0; }
+    .client-info { text-align: left; }
+    .client-name { font-weight: 700; font-size: 0.95rem; color: var(--text); display: block; }
+    .client-detail { font-size: 0.78rem; color: var(--muted); display: block; margin-top: 0.1rem; }
+
     /* Pain scenarios */
     .pain { margin: 5rem auto; }
     .section-header { text-align: center; margin-bottom: 3rem; }
@@ -155,6 +166,8 @@
       .scenario pre { font-size: 0.74rem; }
       .feature-grid { grid-template-columns: 1fr; }
       .star-cta { padding: 2.5rem 1.25rem; }
+      .clients-row { flex-direction: column; align-items: center; }
+      .client-card { width: 100%; max-width: 320px; }
     }
   </style>
 </head>
@@ -189,6 +202,34 @@
     <span>Sync &amp; async</span>·
     <span>No signup</span>
   </p>
+</section>
+
+<!-- SUPPORTED CLIENTS -->
+<section class="clients">
+  <p class="clients-label">Works with</p>
+  <div class="clients-row">
+    <div class="client-card">
+      <div class="client-logo">🟢</div>
+      <div class="client-info">
+        <span class="client-name">OpenAI</span>
+        <span class="client-detail">gpt-4o, o1, o3 · streaming ✓</span>
+      </div>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">🟠</div>
+      <div class="client-info">
+        <span class="client-name">Anthropic</span>
+        <span class="client-detail">Claude 3 / 4 · streaming ✓</span>
+      </div>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">🟡</div>
+      <div class="client-info">
+        <span class="client-name">AWS Bedrock</span>
+        <span class="client-detail">Converse API · streaming ✓</span>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- HOW IT WORKS -->
