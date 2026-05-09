@@ -4,6 +4,7 @@ from .context import start_span, end_span, get_current_span
 from .decorators import trace
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
+from .patches.bedrock_patch import patch_bedrock
 
 _patched = False
 
@@ -38,6 +39,7 @@ def instrument(
     if not _patched:
         patch_openai()
         patch_anthropic()
+        patch_bedrock()
         _patched = True
 
 
