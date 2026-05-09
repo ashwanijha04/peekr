@@ -1,7 +1,7 @@
 import asyncio
 import pytest
-from agenttracer.decorators import trace
-from agenttracer.exporters import _exporters
+from peekai.decorators import trace
+from peekai.exporters import _exporters
 
 
 class CollectingExporter:

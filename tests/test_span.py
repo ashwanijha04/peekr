@@ -1,5 +1,5 @@
 import time
-from agenttracer.span import Span
+from peekai.span import Span
 
 
 def test_span_defaults():

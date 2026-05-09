@@ -6,7 +6,7 @@ from collections import defaultdict
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: agenttracer view [--io] <traces.jsonl>")
+        print("Usage: peekai view [--io] <traces.jsonl>")
         sys.exit(1)
 
     cmd = sys.argv[1]

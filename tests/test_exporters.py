@@ -2,8 +2,8 @@ import json
 import os
 import tempfile
 import pytest
-from agenttracer.span import Span
-from agenttracer.exporters import JSONLExporter, ConsoleExporter, _exporters, add_exporter, export_span
+from peekai.span import Span
+from peekai.exporters import JSONLExporter, ConsoleExporter, _exporters, add_exporter, export_span
 
 
 @pytest.fixture(autouse=True)

@@ -1,10 +1,10 @@
 import sys
 sys.path.insert(0, ".")
 
-import agenttracer
-agenttracer.instrument(jsonl_path=None)  # console only for this test
+import peekai
+peekai.instrument(jsonl_path=None)  # console only for this test
 
-from agenttracer import trace
+from peekai import trace
 
 
 @trace

@@ -1,14 +1,14 @@
-# agenttracer
+# peekai
 
-[![PyPI](https://img.shields.io/pypi/v/agenttracer)](https://pypi.org/project/agenttracer/)
-[![CI](https://github.com/ashwanijha04/agenttracer/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/agenttracer/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/peekai)](https://pypi.org/project/peekai/)
+[![CI](https://github.com/ashwanijha04/peekai/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 
 Zero-config observability for AI agents. Auto-instruments OpenAI and Anthropic SDKs — no code changes needed.
 
 ```
-pip install agenttracer
+pip install peekai
 ```
 
 ---
@@ -16,8 +16,8 @@ pip install agenttracer
 ## Quickstart
 
 ```python
-import agenttracer
-agenttracer.instrument()
+import peekai
+peekai.instrument()
 
 # Your existing agent code — zero changes
 import openai
@@ -27,7 +27,7 @@ openai.chat.completions.create(model="gpt-4o", messages=[...])
 Every LLM call is automatically captured. View your traces:
 
 ```bash
-agenttracer view traces.jsonl
+peekai view traces.jsonl
 ```
 
 ```
@@ -45,16 +45,16 @@ agent.run  1243ms
 
 ```bash
 # Base (no LLM SDK required)
-pip install agenttracer
+pip install peekai
 
 # With OpenAI
-pip install "agenttracer[openai]"
+pip install "peekai[openai]"
 
 # With Anthropic
-pip install "agenttracer[anthropic]"
+pip install "peekai[anthropic]"
 
 # Both
-pip install "agenttracer[all]"
+pip install "peekai[all]"
 ```
 
 ---
@@ -64,16 +64,16 @@ pip install "agenttracer[all]"
 ### Auto-instrument LLM SDKs
 
 ```python
-import agenttracer
+import peekai
 
-agenttracer.instrument()
+peekai.instrument()
 # That's it. All OpenAI and Anthropic calls are now traced.
 ```
 
 Options:
 
 ```python
-agenttracer.instrument(
+peekai.instrument(
     console=True,               # print spans as they happen (default: True)
     jsonl_path="traces.jsonl",  # write to file (default: traces.jsonl)
     jsonl_path=None,            # disable file output
@@ -83,7 +83,7 @@ agenttracer.instrument(
 ### Trace your own functions
 
 ```python
-from agenttracer import trace
+from peekai import trace
 
 @trace
 def search_web(query: str) -> list[str]:
@@ -116,7 +116,7 @@ def get_api_key(): ...
 For cases where a decorator doesn't fit:
 
 ```python
-from agenttracer import start_span, end_span
+from peekai import start_span, end_span
 
 span, token = start_span("my.operation")
 span.attributes["custom_key"] = "custom_value"
@@ -135,10 +135,10 @@ finally:
 
 ```bash
 # Basic tree view
-agenttracer view traces.jsonl
+peekai view traces.jsonl
 
 # Show inputs and outputs
-agenttracer view --io traces.jsonl
+peekai view --io traces.jsonl
 ```
 
 ---
@@ -163,14 +163,14 @@ agenttracer view --io traces.jsonl
 ## Custom exporters
 
 ```python
-from agenttracer.exporters import add_exporter
+from peekai.exporters import add_exporter
 
 class MyExporter:
     def export(self, span):
         # send to your backend
         requests.post("https://my-backend.com/spans", json=span.to_dict())
 
-agenttracer.instrument()
+peekai.instrument()
 add_exporter(MyExporter())
 ```
 
@@ -187,8 +187,8 @@ Span context (parent/child relationships) is tracked via Python's `contextvars.C
 ## Contributing
 
 ```bash
-git clone https://github.com/ashwanijha04/agenttracer
-cd agenttracer
+git clone https://github.com/ashwanijha04/peekai
+cd peekai
 pip install -e ".[dev]"
 pytest
 ```

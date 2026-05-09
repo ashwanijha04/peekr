@@ -1,5 +1,5 @@
 import asyncio
-from agenttracer.context import start_span, end_span, get_current_span, get_or_create_trace_id
+from peekai.context import start_span, end_span, get_current_span, get_or_create_trace_id
 
 
 def test_no_active_span():

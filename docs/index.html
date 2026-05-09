@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>agenttracer — Zero-config observability for AI agents</title>
+  <title>peekai — Zero-config observability for AI agents</title>
   <meta name="description" content="Auto-instrument OpenAI and Anthropic SDKs with 2 lines of code. Free, open source, no backend required." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -220,8 +220,8 @@
   <span class="nav-logo">agent<span>tracer</span></span>
   <div class="nav-links">
     <a href="#docs">Docs</a>
-    <a href="https://github.com/ashwanijha04/agenttracer">GitHub</a>
-    <a href="https://pypi.org/project/agenttracer/">PyPI</a>
+    <a href="https://github.com/ashwanijha04/peekai">GitHub</a>
+    <a href="https://pypi.org/project/peekai/">PyPI</a>
   </div>
 </nav>
 
@@ -233,11 +233,11 @@
   </p>
   <div class="cta-group">
     <a href="#docs" class="btn btn-primary">Get started</a>
-    <a href="https://github.com/ashwanijha04/agenttracer" class="btn btn-secondary">View on GitHub</a>
+    <a href="https://github.com/ashwanijha04/peekai" class="btn btn-secondary">View on GitHub</a>
   </div>
   <div class="install-strip">
-    <code>pip install agenttracer</code>
-    <button class="copy-btn" onclick="navigator.clipboard.writeText('pip install agenttracer');this.textContent='Copied!'">Copy</button>
+    <code>pip install peekai</code>
+    <button class="copy-btn" onclick="navigator.clipboard.writeText('pip install peekai');this.textContent='Copied!'">Copy</button>
   </div>
 </section>
 
@@ -245,10 +245,10 @@
   <div class="demo-grid">
     <div class="code-card">
       <div class="code-card-header"><div class="dot"></div> your_agent.py</div>
-      <pre><span class="kw">import</span> agenttracer
-agenttracer.<span class="fn">instrument</span>()
+      <pre><span class="kw">import</span> peekai
+peekai.<span class="fn">instrument</span>()
 
-<span class="kw">from</span> agenttracer <span class="kw">import</span> trace
+<span class="kw">from</span> peekai <span class="kw">import</span> trace
 <span class="kw">import</span> openai
 
 <span class="cm"># Decorate your tool calls</span>
@@ -264,7 +264,7 @@ openai.chat.completions.<span class="fn">create</span>(
 )</pre>
     </div>
     <div class="code-card">
-      <div class="code-card-header"><div class="dot"></div> agenttracer view traces.jsonl</div>
+      <div class="code-card-header"><div class="dot"></div> peekai view traces.jsonl</div>
       <pre><span class="gr">Trace a3f2b1c0  1243ms  891tok</span>
 ────────────────────────────────
 <span class="fn">agent.run</span>  1243ms
@@ -317,7 +317,7 @@ openai.chat.completions.<span class="fn">create</span>(
 </section>
 
 <footer>
-  <p>MIT License · <a href="https://github.com/ashwanijha04/agenttracer">GitHub</a> · <a href="https://pypi.org/project/agenttracer/">PyPI</a></p>
+  <p>MIT License · <a href="https://github.com/ashwanijha04/peekai">GitHub</a> · <a href="https://pypi.org/project/peekai/">PyPI</a></p>
 </footer>
 
 </body>
