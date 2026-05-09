@@ -74,7 +74,21 @@
     footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; font-size: 0.85rem; color: var(--muted); }
     footer a { color: var(--muted); }
     footer a:hover { color: var(--text); }
-    @media (max-width: 600px) { .hero { padding: 4rem 1.5rem 3rem; } .pain, .demo, .features { padding: 0 1.5rem; } }
+    @media (max-width: 640px) {
+      nav { padding: 0 1rem; }
+      .nav-links { gap: 1rem; font-size: 0.82rem; }
+      .hero { padding: 3.5rem 1.25rem 2.5rem; }
+      h1 { font-size: 1.9rem; }
+      .hero-sub { font-size: 1rem; }
+      .install-strip { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+      .pain, .demo, .features { padding: 0 1.25rem; }
+      .pain { margin: 3rem auto; }
+      .scenario { padding: 1.25rem; }
+      .scenario pre { font-size: 0.75rem; -webkit-overflow-scrolling: touch; }
+      .pain-intro h2, .demo h2, .features h2 { font-size: 1.5rem; }
+      .code-card pre { font-size: 0.78rem; -webkit-overflow-scrolling: touch; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>

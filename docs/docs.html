@@ -51,14 +51,31 @@
     .callout { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1rem 0 1.5rem; font-size: 0.9rem; color: #c9d1d9; }
     .callout.warn { border-left-color: var(--orange); }
 
-    table { width: 100%; border-collapse: collapse; margin: 1rem 0 1.5rem; font-size: 0.875rem; }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1rem 0 1.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 480px; }
     th { text-align: left; padding: 0.6rem 1rem; background: var(--bg2); border: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
     td { padding: 0.6rem 1rem; border: 1px solid var(--border); color: #c9d1d9; vertical-align: top; }
+
+    .mobile-toc { display: none; }
 
     @media (max-width: 768px) {
       .layout { grid-template-columns: 1fr; }
       .sidebar { display: none; }
-      .content { padding: 2rem 1.5rem 4rem; }
+      .content { padding: 2rem 1.25rem 4rem; max-width: 100%; }
+      .content h1 { font-size: 1.6rem; }
+      .content h2 { font-size: 1.15rem; }
+      .content pre { border-radius: 8px; }
+      .content pre code { font-size: 0.78rem; -webkit-overflow-scrolling: touch; }
+      .mobile-toc { display: block; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; margin-bottom: 2rem; }
+      .mobile-toc summary { font-weight: 700; font-size: 0.9rem; cursor: pointer; color: var(--text); list-style: none; display: flex; justify-content: space-between; }
+      .mobile-toc summary::after { content: "↓"; color: var(--muted); }
+      details[open] .mobile-toc summary::after { content: "↑"; }
+      .mobile-toc a { display: block; font-size: 0.875rem; color: var(--muted); padding: 0.3rem 0; }
+      .mobile-toc a:hover { color: var(--text); text-decoration: none; }
+      .mobile-toc .toc-section { margin-top: 0.75rem; }
+      .mobile-toc .toc-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.25rem; }
+      nav { padding: 0 1rem; }
+      .nav-links { gap: 1rem; font-size: 0.82rem; }
     }
   </style>
 </head>
@@ -104,6 +121,28 @@
   <main class="content">
     <h1>Documentation</h1>
     <p>Peekr records every LLM call, tool invocation, token count, and error as a tree you can inspect. This page covers everything from installation to advanced usage.</p>
+
+    <details class="mobile-toc">
+      <summary>On this page</summary>
+      <div class="toc-section"><div class="toc-label">Getting started</div>
+        <a href="#install">Installation</a>
+        <a href="#quickstart">Quickstart</a>
+      </div>
+      <div class="toc-section"><div class="toc-label">Examples</div>
+        <a href="#debug-wrong-answer">Debug wrong answers</a>
+        <a href="#debug-slow">Find slow steps</a>
+        <a href="#debug-cost">Reduce token costs</a>
+        <a href="#debug-prod">Prod vs local bugs</a>
+      </div>
+      <div class="toc-section"><div class="toc-label">API reference</div>
+        <a href="#instrument">instrument()</a>
+        <a href="#trace-decorator">@trace</a>
+        <a href="#manual-spans">Manual spans</a>
+        <a href="#cli">CLI viewer</a>
+        <a href="#exporters">Custom exporters</a>
+        <a href="#span-fields">Span fields</a>
+      </div>
+    </details>
 
     <!-- INSTALL -->
     <h2 id="install">Installation</h2>
@@ -216,11 +255,11 @@ messages = conversation_history  <span class="cm"># gets longer every turn</span
     console=<span class="kw">True</span>,                <span class="cm"># print spans live (default: True)</span>
     jsonl_path=<span class="st">"traces.jsonl"</span>,   <span class="cm"># write to file (default: "traces.jsonl")</span>
 )</code></pre>
-    <table>
+    <div class="table-wrap"><table>
       <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
       <tr><td><code>console</code></td><td>bool</td><td>True</td><td>Print each span to stdout as it completes</td></tr>
       <tr><td><code>jsonl_path</code></td><td>str | None</td><td>"traces.jsonl"</td><td>Path to write traces. Set to None to disable file output.</td></tr>
-    </table>
+    </table></div>
 
     <h2 id="trace-decorator">@trace decorator</h2>
     <p>Wraps a function as a span. Works on sync and async functions.</p>
@@ -241,11 +280,11 @@ messages = conversation_history  <span class="cm"># gets longer every turn</span
 <span class="cm"># Async</span>
 <span class="kw">@</span><span class="fn">trace</span>
 <span class="kw">async def</span> <span class="fn">fetch_user</span>(user_id: int) -> dict: ...</code></pre>
-    <table>
+    <div class="table-wrap"><table>
       <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
       <tr><td><code>name</code></td><td>str | None</td><td>module.function</td><td>Custom span name</td></tr>
       <tr><td><code>capture_io</code></td><td>bool</td><td>True</td><td>Record function args and return value</td></tr>
-    </table>
+    </table></div>
     <div class="callout warn">Inputs and outputs are serialized to JSON and truncated at 500 characters. Use <code>capture_io=False</code> for functions that handle secrets or large payloads.</div>
 
     <h2 id="manual-spans">Manual spans</h2>
@@ -288,7 +327,7 @@ peekr.<span class="fn">instrument</span>()
     <!-- SPAN FIELDS -->
     <h2 id="span-fields">Span fields</h2>
     <p>Every span written to <code>traces.jsonl</code> is a JSON object with these fields:</p>
-    <table>
+    <div class="table-wrap"><table>
       <tr><th>Field</th><th>Type</th><th>Description</th></tr>
       <tr><td><code>trace_id</code></td><td>string</td><td>Groups all spans in one agent run</td></tr>
       <tr><td><code>span_id</code></td><td>string</td><td>Unique ID for this span</td></tr>
@@ -305,7 +344,7 @@ peekr.<span class="fn">instrument</span>()
       <tr><td><code>attributes.input</code></td><td>string</td><td>Serialized function args (truncated)</td></tr>
       <tr><td><code>attributes.output</code></td><td>string</td><td>Serialized return value (truncated)</td></tr>
       <tr><td><code>attributes.error</code></td><td>string</td><td>Exception message if status is "error"</td></tr>
-    </table>
+    </table></div>
   </main>
 </div>
 
