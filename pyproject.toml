@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "peekai"
+name = "peekr"
 version = "0.1.0"
 description = "Zero-config observability for AI agents"
 readme = "README.md"
@@ -18,15 +18,15 @@ all = ["openai>=1.0", "anthropic>=0.20"]
 dev = ["pytest>=8.0"]
 
 [project.urls]
-Homepage = "https://ashwanijha04.github.io/peekai"
-Repository = "https://github.com/ashwanijha04/peekai"
+Homepage = "https://ashwanijha04.github.io/peekr"
+Repository = "https://github.com/ashwanijha04/peekr"
 
 [project.scripts]
-peekai = "peekai.cli:main"
+peekr = "peekr.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["peekai*"]
+include = ["peekr*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

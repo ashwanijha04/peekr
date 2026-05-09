@@ -1,7 +1,7 @@
 import asyncio
 import pytest
-from peekai.decorators import trace
-from peekai.exporters import _exporters
+from peekr.decorators import trace
+from peekr.exporters import _exporters
 
 
 class CollectingExporter:

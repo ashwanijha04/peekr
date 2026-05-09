@@ -1,5 +1,5 @@
 import time
-from peekai.span import Span
+from peekr.span import Span
 
 
 def test_span_defaults():

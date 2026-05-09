@@ -1,10 +1,10 @@
 import sys
 sys.path.insert(0, ".")
 
-import peekai
-peekai.instrument(jsonl_path=None)  # console only for this test
+import peekr
+peekr.instrument(jsonl_path=None)  # console only for this test
 
-from peekai import trace
+from peekr import trace
 
 
 @trace

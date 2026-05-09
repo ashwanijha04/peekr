@@ -1,14 +1,14 @@
-# peekai
+# peekr
 
-[![PyPI](https://img.shields.io/pypi/v/peekai)](https://pypi.org/project/peekai/)
-[![CI](https://github.com/ashwanijha04/peekai/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekai/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/peekr)](https://pypi.org/project/peekr/)
+[![CI](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 
 Zero-config observability for AI agents. Auto-instruments OpenAI and Anthropic SDKs — no code changes needed.
 
 ```
-pip install peekai
+pip install peekr
 ```
 
 ---
@@ -16,8 +16,8 @@ pip install peekai
 ## Quickstart
 
 ```python
-import peekai
-peekai.instrument()
+import peekr
+peekr.instrument()
 
 # Your existing agent code — zero changes
 import openai
@@ -27,7 +27,7 @@ openai.chat.completions.create(model="gpt-4o", messages=[...])
 Every LLM call is automatically captured. View your traces:
 
 ```bash
-peekai view traces.jsonl
+peekr view traces.jsonl
 ```
 
 ```
@@ -45,16 +45,16 @@ agent.run  1243ms
 
 ```bash
 # Base (no LLM SDK required)
-pip install peekai
+pip install peekr
 
 # With OpenAI
-pip install "peekai[openai]"
+pip install "peekr[openai]"
 
 # With Anthropic
-pip install "peekai[anthropic]"
+pip install "peekr[anthropic]"
 
 # Both
-pip install "peekai[all]"
+pip install "peekr[all]"
 ```
 
 ---
@@ -64,16 +64,16 @@ pip install "peekai[all]"
 ### Auto-instrument LLM SDKs
 
 ```python
-import peekai
+import peekr
 
-peekai.instrument()
+peekr.instrument()
 # That's it. All OpenAI and Anthropic calls are now traced.
 ```
 
 Options:
 
 ```python
-peekai.instrument(
+peekr.instrument(
     console=True,               # print spans as they happen (default: True)
     jsonl_path="traces.jsonl",  # write to file (default: traces.jsonl)
     jsonl_path=None,            # disable file output
@@ -83,7 +83,7 @@ peekai.instrument(
 ### Trace your own functions
 
 ```python
-from peekai import trace
+from peekr import trace
 
 @trace
 def search_web(query: str) -> list[str]:
@@ -116,7 +116,7 @@ def get_api_key(): ...
 For cases where a decorator doesn't fit:
 
 ```python
-from peekai import start_span, end_span
+from peekr import start_span, end_span
 
 span, token = start_span("my.operation")
 span.attributes["custom_key"] = "custom_value"
@@ -135,10 +135,10 @@ finally:
 
 ```bash
 # Basic tree view
-peekai view traces.jsonl
+peekr view traces.jsonl
 
 # Show inputs and outputs
-peekai view --io traces.jsonl
+peekr view --io traces.jsonl
 ```
 
 ---
@@ -163,14 +163,14 @@ peekai view --io traces.jsonl
 ## Custom exporters
 
 ```python
-from peekai.exporters import add_exporter
+from peekr.exporters import add_exporter
 
 class MyExporter:
     def export(self, span):
         # send to your backend
         requests.post("https://my-backend.com/spans", json=span.to_dict())
 
-peekai.instrument()
+peekr.instrument()
 add_exporter(MyExporter())
 ```
 
@@ -187,8 +187,8 @@ Span context (parent/child relationships) is tracked via Python's `contextvars.C
 ## Contributing
 
 ```bash
-git clone https://github.com/ashwanijha04/peekai
-cd peekai
+git clone https://github.com/ashwanijha04/peekr
+cd peekr
 pip install -e ".[dev]"
 pytest
 ```
