@@ -1,5 +1,10 @@
+from __future__ import annotations
+import json
+
 from ..context import start_span, end_span
 from ..exporters import export_span
+
+_TRUNCATE = 1000
 
 
 def patch_anthropic():
@@ -13,6 +18,16 @@ def patch_anthropic():
     def patched_create(self, *args, **kwargs):
         span, token = start_span("anthropic.messages")
         span.attributes["model"] = kwargs.get("model", "unknown")
+
+        messages = kwargs.get("messages", [])
+        if messages:
+            prompt = json.dumps(messages, default=str)
+            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+
+        system = kwargs.get("system")
+        if system:
+            span.attributes["system"] = system[:_TRUNCATE] + "…" if len(system) > _TRUNCATE else system
+
         try:
             result = original_create(self, *args, **kwargs)
             usage = getattr(result, "usage", None)
@@ -20,6 +35,9 @@ def patch_anthropic():
                 span.attributes["tokens_input"] = usage.input_tokens
                 span.attributes["tokens_output"] = usage.output_tokens
                 span.attributes["tokens_total"] = usage.input_tokens + usage.output_tokens
+            if result.content:
+                output = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
+                span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
             span.status = "ok"
             return result
         except Exception as e:

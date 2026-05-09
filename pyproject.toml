@@ -22,3 +22,9 @@ agenttracer = "agenttracer.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agenttracer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
