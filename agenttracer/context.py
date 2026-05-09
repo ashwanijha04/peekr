@@ -1,3 +1,4 @@
+from __future__ import annotations
 import uuid
 from contextvars import ContextVar
 from typing import Optional

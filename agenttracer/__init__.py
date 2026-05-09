@@ -1,5 +1,7 @@
+from __future__ import annotations
 from .exporters import add_exporter, JSONLExporter, ConsoleExporter
 from .context import start_span, end_span, get_current_span
+from .decorators import trace
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 
@@ -21,4 +23,4 @@ def instrument(exporter=None, console: bool = True, jsonl_path: str | None = "tr
     patch_anthropic()
 
 
-__all__ = ["instrument", "start_span", "end_span", "get_current_span", "JSONLExporter", "ConsoleExporter"]
+__all__ = ["instrument", "trace", "start_span", "end_span", "get_current_span", "JSONLExporter", "ConsoleExporter"]
