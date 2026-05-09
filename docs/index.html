@@ -110,9 +110,11 @@
     .compare-table th { padding: 0.75rem 1rem; background: var(--bg2); border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; text-align: left; }
     .compare-table th:first-child { color: var(--muted); }
     .compare-table th.us { color: var(--accent); }
-    .compare-table td { padding: 0.75rem 1rem; border: 1px solid var(--border); font-size: 0.875rem; color: var(--muted); }
+    .compare-table td { padding: 0.75rem 1rem; border: 1px solid var(--border); font-size: 1rem; color: var(--muted); text-align: center; }
+    .compare-table td:first-child { text-align: left; font-size: 0.875rem; }
     .compare-table td.us { background: rgba(88,166,255,0.04); color: var(--text); }
-    .yes { color: var(--green); font-weight: 600; }
+    .compare-table th:not(:first-child) { text-align: center; }
+    .yes { color: var(--green); }
     .no { color: var(--red); }
     .partial { color: var(--orange); }
     .compare-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; border: 1px solid var(--border); }
@@ -401,59 +403,59 @@ ORDER BY start_time;</pre>
       </tr>
       <tr>
         <td>Zero config</td>
-        <td class="partial">Partial</td>
-        <td class="no">No</td>
-        <td class="no">No</td>
-        <td class="us yes">Yes</td>
+        <td class="partial">〜</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>No account required</td>
-        <td class="yes">Yes</td>
-        <td class="no">No</td>
-        <td class="yes">Yes</td>
-        <td class="us yes">Yes</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Works with any framework</td>
-        <td class="yes">Yes</td>
-        <td class="no">LangChain only</td>
-        <td class="yes">Yes</td>
-        <td class="us yes">Yes</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Captures token counts</td>
-        <td class="no">No</td>
-        <td class="yes">Yes</td>
-        <td class="no">No</td>
-        <td class="us yes">Yes</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Captures inputs &amp; outputs</td>
-        <td class="partial">Manual</td>
-        <td class="yes">Yes</td>
-        <td class="no">No</td>
-        <td class="us yes">Yes</td>
+        <td class="partial">〜</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Parent/child span tree</td>
-        <td class="no">No</td>
-        <td class="yes">Yes</td>
-        <td class="yes">Yes</td>
-        <td class="us yes">Yes</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Queryable locally</td>
-        <td class="no">No</td>
-        <td class="no">Cloud only</td>
-        <td class="partial">Partial</td>
-        <td class="us yes">Yes (SQLite)</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="partial">〜</td>
+        <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Data stays on your machine</td>
-        <td class="yes">Yes</td>
-        <td class="no">No</td>
-        <td class="partial">Depends</td>
-        <td class="us yes">Yes</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="partial">〜</td>
+        <td class="us yes">✓</td>
       </tr>
     </table>
   </div>
