@@ -107,6 +107,7 @@
     <div class="sidebar-section">
       <div class="sidebar-label">API reference</div>
       <a href="#instrument">instrument()</a>
+      <a href="#sqlite">SQLite storage</a>
       <a href="#trace-decorator">@trace</a>
       <a href="#manual-spans">Manual spans</a>
       <a href="#cli">CLI viewer</a>
@@ -253,13 +254,48 @@ messages = conversation_history  <span class="cm"># gets longer every turn</span
     <p>Call once, before any LLM calls. Patches the OpenAI and Anthropic SDKs.</p>
     <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
     console=<span class="kw">True</span>,                <span class="cm"># print spans live (default: True)</span>
-    jsonl_path=<span class="st">"traces.jsonl"</span>,   <span class="cm"># write to file (default: "traces.jsonl")</span>
+    storage=<span class="st">"jsonl"</span>,             <span class="cm"># "jsonl" | "sqlite" | "both"</span>
+    jsonl_path=<span class="st">"traces.jsonl"</span>,   <span class="cm"># JSONL output path</span>
+    db_path=<span class="st">"traces.db"</span>,         <span class="cm"># SQLite output path</span>
 )</code></pre>
     <div class="table-wrap"><table>
       <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
       <tr><td><code>console</code></td><td>bool</td><td>True</td><td>Print each span to stdout as it completes</td></tr>
-      <tr><td><code>jsonl_path</code></td><td>str | None</td><td>"traces.jsonl"</td><td>Path to write traces. Set to None to disable file output.</td></tr>
+      <tr><td><code>storage</code></td><td>str</td><td>"jsonl"</td><td>"jsonl", "sqlite", or "both"</td></tr>
+      <tr><td><code>jsonl_path</code></td><td>str</td><td>"traces.jsonl"</td><td>Path for JSONL output</td></tr>
+      <tr><td><code>db_path</code></td><td>str</td><td>"traces.db"</td><td>Path for SQLite output</td></tr>
     </table></div>
+
+    <h2 id="sqlite">SQLite storage</h2>
+    <p>SQLite uses WAL mode so multiple processes — Docker containers, CI workers, parallel agents — can write spans safely at the same time. And because it's a real database, you can query across all your runs without any extra tooling.</p>
+    <pre><div class="pre-header">python</div><code><span class="cm"># Enable SQLite</span>
+peekr.<span class="fn">instrument</span>(storage=<span class="st">"sqlite"</span>)
+
+<span class="cm"># Write to both JSONL and SQLite</span>
+peekr.<span class="fn">instrument</span>(storage=<span class="st">"both"</span>)</code></pre>
+    <p>View with the same CLI command:</p>
+    <pre><div class="pre-header">terminal</div><code>peekr view traces.db
+peekr view --io traces.db</code></pre>
+    <p>Or query directly with any SQLite client:</p>
+    <pre><div class="pre-header">terminal — useful queries</div><code><span class="cm"># Slowest tool calls</span>
+sqlite3 traces.db <span class="st">"SELECT name, ROUND(AVG(duration_ms)) avg_ms
+  FROM spans GROUP BY name ORDER BY avg_ms DESC"</span>
+
+<span class="cm"># Token spend by model</span>
+sqlite3 traces.db <span class="st">"SELECT json_extract(attributes,'$.model') model,
+  SUM(json_extract(attributes,'$.tokens_total')) tokens
+  FROM spans GROUP BY model"</span>
+
+<span class="cm"># All errors</span>
+sqlite3 traces.db <span class="st">"SELECT name, trace_id,
+  json_extract(attributes,'$.error') msg
+  FROM spans WHERE status = 'error'"</span>
+
+<span class="cm"># Token growth over time (detect unbounded history)</span>
+sqlite3 traces.db <span class="st">"SELECT trace_id,
+  SUM(json_extract(attributes,'$.tokens_total')) total
+  FROM spans GROUP BY trace_id ORDER BY start_time"</span></code></pre>
+    <div class="callout">SQLite is ideal for Docker and CI where multiple processes share a single file. JSONL is better for quick local debugging where you want to <code>grep</code> or <code>tail -f</code>.</div>
 
     <h2 id="trace-decorator">@trace decorator</h2>
     <p>Wraps a function as a span. Works on sync and async functions.</p>

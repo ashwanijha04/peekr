@@ -4,90 +4,155 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>peekr — cProfile for AI agents</title>
-  <meta name="description" content="cProfile tells you where CPU time went. Peekr tells you where time, tokens, and money went in your AI agent — and what each step actually saw and returned." />
+  <meta name="description" content="Agents are black boxes. Peekr makes them transparent. Auto-instruments OpenAI and Anthropic — no code changes, no backend, free forever." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
       --border: #30363d; --text: #e6edf3; --muted: #8b949e;
       --accent: #58a6ff; --green: #3fb950; --purple: #bc8cff;
-      --orange: #ffa657; --red: #f85149;
+      --orange: #ffa657; --red: #f85149; --yellow: #e3b341;
     }
     body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    section { max-width: 860px; margin: 0 auto; padding: 0 2rem; }
 
-    nav { border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+    /* Nav */
+    nav { border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; position: sticky; top: 0; background: rgba(13,17,23,0.95); backdrop-filter: blur(8px); z-index: 10; }
     .nav-logo { font-weight: 800; font-size: 1.2rem; color: var(--text); letter-spacing: -0.02em; }
     .nav-logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 1.5rem; font-size: 0.9rem; }
+    .nav-links { display: flex; gap: 1.25rem; align-items: center; font-size: 0.88rem; }
     .nav-links a { color: var(--muted); }
     .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-star { background: var(--bg3); border: 1px solid var(--border); color: var(--text) !important; border-radius: 6px; padding: 0.3rem 0.75rem; font-weight: 600; font-size: 0.82rem; display: flex; align-items: center; gap: 0.35rem; }
+    .nav-star:hover { border-color: var(--yellow); color: var(--yellow) !important; text-decoration: none !important; }
 
-    .hero { max-width: 780px; margin: 0 auto; padding: 6rem 2rem 4rem; text-align: center; }
-    .badge { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 0.25rem 0.9rem; font-size: 0.8rem; color: var(--green); margin-bottom: 1.5rem; }
-    h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 1.2rem; }
+    /* Hero */
+    .hero { text-align: center; padding: 6rem 2rem 3.5rem; }
+    .badge { display: inline-block; background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 0.25rem 0.9rem; font-size: 0.78rem; color: var(--green); margin-bottom: 1.5rem; letter-spacing: 0.02em; }
+    h1 { font-size: clamp(2.4rem, 5.5vw, 3.8rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.08; margin-bottom: 1.25rem; }
     h1 em { font-style: normal; color: var(--accent); }
-    .hero-sub { font-size: 1.15rem; color: var(--muted); max-width: 520px; margin: 0 auto 2.5rem; }
+    .hero-sub { font-size: 1.15rem; color: var(--muted); max-width: 540px; margin: 0 auto 2.5rem; line-height: 1.7; }
     .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
-    .btn { padding: 0.65rem 1.5rem; border-radius: 6px; font-size: 0.95rem; font-weight: 600; border: none; transition: opacity 0.15s; display: inline-block; }
-    .btn:hover { opacity: 0.82; text-decoration: none; }
+    .btn { padding: 0.7rem 1.6rem; border-radius: 8px; font-size: 0.95rem; font-weight: 600; border: none; transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .btn:hover { opacity: 0.85; text-decoration: none; transform: translateY(-1px); }
     .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
-    .install-strip { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; max-width: 380px; margin: 0 auto; padding: 0.75rem 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .btn-star { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .btn-star:hover { border-color: var(--yellow); color: var(--yellow); }
+    .btn-docs { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .install-strip { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; max-width: 380px; margin: 0 auto 1.5rem; padding: 0.8rem 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
     .install-strip code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.95rem; color: var(--green); }
-    .copy-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.8rem; cursor: pointer; }
-    .copy-btn:hover { color: var(--text); }
+    .copy-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 4px; padding: 0.2rem 0.6rem; font-size: 0.78rem; cursor: pointer; white-space: nowrap; }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+    .hero-meta { font-size: 0.82rem; color: var(--muted); }
+    .hero-meta span { margin: 0 0.5rem; }
 
-    .pain { max-width: 780px; margin: 5rem auto; padding: 0 2rem; }
-    .pain-intro { text-align: center; margin-bottom: 3rem; }
-    .pain-intro h2 { font-size: 1.9rem; font-weight: 700; margin-bottom: 0.75rem; }
-    .pain-intro p { color: var(--muted); font-size: 1.05rem; }
-    .scenario { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; margin-bottom: 1.5rem; }
+    /* How it works strip */
+    .how { margin: 4rem auto; padding: 0 2rem; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .step { background: var(--bg2); padding: 1.75rem 1.5rem; }
+    .step-num { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.6rem; }
+    .step h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .step p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+    .step code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.82em; color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px; }
+
+    /* Pain scenarios */
+    .pain { margin: 5rem auto; }
+    .section-header { text-align: center; margin-bottom: 3rem; }
+    .section-header h2 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+    .section-header p { color: var(--muted); font-size: 1.05rem; }
+    .scenario { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem; margin-bottom: 1.25rem; transition: border-color 0.15s; }
+    .scenario:hover { border-color: var(--accent); }
     .scenario-header { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
-    .scenario-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 2px; }
-    .scenario h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .scenario-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .scenario h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem; }
+    .scenario .fix { display: inline-block; margin-top: 0.4rem; font-size: 0.8rem; background: rgba(63,185,80,0.1); color: var(--green); border: 1px solid rgba(63,185,80,0.3); border-radius: 4px; padding: 0.15rem 0.5rem; }
     .scenario p { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
-    .scenario pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.8rem; line-height: 1.7; overflow-x: auto; margin-top: 1.25rem; }
-    .hl-red { color: var(--red); }
-    .hl-green { color: var(--green); }
-    .hl-blue { color: var(--accent); }
-    .hl-orange { color: var(--orange); }
-    .hl-muted { color: var(--muted); }
+    .scenario pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.8rem; line-height: 1.75; overflow-x: auto; margin-top: 1.25rem; -webkit-overflow-scrolling: touch; }
+    .hl-red { color: var(--red); } .hl-green { color: var(--green); } .hl-blue { color: var(--accent); } .hl-muted { color: var(--muted); } .hl-orange { color: var(--orange); }
 
-    .demo { max-width: 780px; margin: 0 auto 5rem; padding: 0 2rem; }
-    .demo h2 { font-size: 1.9rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem; }
+    /* Demo */
+    .demo { margin: 0 auto 1rem; }
+    .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
     .code-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-    .code-card-header { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); display: flex; gap: 0.5rem; align-items: center; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-    .code-card pre { padding: 1.25rem; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.85rem; line-height: 1.75; overflow-x: auto; }
-    .kw { color: var(--purple); } .fn { color: var(--accent); } .st { color: var(--orange); } .cm { color: var(--muted); font-style: italic; }
+    .code-card-header { padding: 0.55rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--muted); display: flex; gap: 0.4rem; align-items: center; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+    .code-card pre { padding: 1.1rem; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.82rem; line-height: 1.75; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .kw { color: var(--purple); } .fn { color: var(--accent); } .st { color: var(--orange); } .cm { color: var(--muted); font-style: italic; } .gr { color: var(--green); }
 
-    .features { max-width: 780px; margin: 0 auto 5rem; padding: 0 2rem; }
-    .features h2 { font-size: 1.9rem; font-weight: 700; text-align: center; margin-bottom: 2.5rem; }
-    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+    /* Storage section */
+    .storage { margin: 5rem auto; }
+    .storage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .storage-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+    .storage-card.featured { border-color: var(--accent); }
+    .storage-tag { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.75rem; }
+    .storage-tag.new { color: var(--accent); }
+    .storage-tag.default { color: var(--muted); }
+    .storage-tag.advanced { color: var(--purple); }
+    .storage-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .storage-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; margin-bottom: 0.75rem; }
+    .storage-card code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.78rem; color: var(--green); background: var(--bg3); padding: 0.2rem 0.5rem; border-radius: 4px; display: block; }
+
+    /* SQL section */
+    .sql { margin: 5rem auto; }
+    .sql-intro { text-align: center; margin-bottom: 2.5rem; }
+    .sql-intro h2 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+    .sql-intro p { color: var(--muted); font-size: 1.05rem; }
+    .sql-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    .sql-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .sql-card-label { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--muted); }
+    .sql-card pre { padding: 1rem; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.78rem; line-height: 1.7; color: var(--green); overflow-x: auto; }
+
+    /* Compare */
+    .compare { margin: 5rem auto; }
+    .compare-table { width: 100%; border-collapse: collapse; }
+    .compare-table th { padding: 0.75rem 1rem; background: var(--bg2); border: 1px solid var(--border); font-size: 0.8rem; font-weight: 700; text-align: left; }
+    .compare-table th:first-child { color: var(--muted); }
+    .compare-table th.us { color: var(--accent); }
+    .compare-table td { padding: 0.75rem 1rem; border: 1px solid var(--border); font-size: 0.875rem; color: var(--muted); }
+    .compare-table td.us { background: rgba(88,166,255,0.04); color: var(--text); }
+    .yes { color: var(--green); font-weight: 600; }
+    .no { color: var(--red); }
+    .partial { color: var(--orange); }
+    .compare-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; border: 1px solid var(--border); }
+
+    /* Features */
+    .features { margin: 5rem auto; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
     .feature-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem; }
     .feature-icon { font-size: 1.4rem; margin-bottom: 0.6rem; }
     .feature-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.35rem; }
     .feature-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+    .feature-card code { font-size: 0.82em; background: var(--bg3); padding: 0.1em 0.3em; border-radius: 3px; }
 
-    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; font-size: 0.85rem; color: var(--muted); }
-    footer a { color: var(--muted); }
+    /* Star CTA */
+    .star-cta { margin: 5rem auto; text-align: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 3.5rem 2rem; }
+    .star-cta h2 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+    .star-cta p { color: var(--muted); font-size: 1rem; max-width: 460px; margin: 0 auto 2rem; line-height: 1.7; }
+    .btn-star-lg { background: var(--yellow); color: #0d1117; font-size: 1rem; padding: 0.8rem 2rem; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .btn-star-lg:hover { opacity: 0.88; text-decoration: none; transform: translateY(-1px); }
+
+    footer { border-top: 1px solid var(--border); padding: 2.5rem 2rem; text-align: center; font-size: 0.85rem; color: var(--muted); }
+    footer a { color: var(--muted); margin: 0 0.5rem; }
     footer a:hover { color: var(--text); }
-    @media (max-width: 640px) {
+
+    @media (max-width: 680px) {
       nav { padding: 0 1rem; }
-      .nav-links { gap: 1rem; font-size: 0.82rem; }
+      .nav-links { gap: 0.75rem; font-size: 0.8rem; }
       .hero { padding: 3.5rem 1.25rem 2.5rem; }
-      h1 { font-size: 1.9rem; }
-      .hero-sub { font-size: 1rem; }
+      h1 { font-size: 2rem; }
+      .hero-sub { font-size: 0.98rem; }
       .install-strip { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-      .pain, .demo, .features { padding: 0 1.25rem; }
-      .pain { margin: 3rem auto; }
-      .scenario { padding: 1.25rem; }
-      .scenario pre { font-size: 0.75rem; -webkit-overflow-scrolling: touch; }
-      .pain-intro h2, .demo h2, .features h2 { font-size: 1.5rem; }
-      .code-card pre { font-size: 0.78rem; -webkit-overflow-scrolling: touch; }
+      section { padding: 0 1.25rem; }
+      .steps { grid-template-columns: 1fr; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .storage-grid { grid-template-columns: 1fr; }
+      .sql-grid { grid-template-columns: 1fr; }
+      .section-header h2, .sql-intro h2, .star-cta h2 { font-size: 1.5rem; }
+      .scenario pre { font-size: 0.74rem; }
       .feature-grid { grid-template-columns: 1fr; }
+      .star-cta { padding: 2.5rem 1.25rem; }
     }
   </style>
 </head>
@@ -97,27 +162,57 @@
   <span class="nav-logo">peek<span>r</span></span>
   <div class="nav-links">
     <a href="docs.html">Docs</a>
-    <a href="https://github.com/ashwanijha04/peekr">GitHub</a>
     <a href="https://pypi.org/project/peekr/">PyPI</a>
+    <a href="https://github.com/ashwanijha04/peekr" class="nav-star">⭐ Star</a>
   </div>
 </nav>
 
+<!-- HERO -->
 <section class="hero">
   <div class="badge">Open Source · MIT · Free forever</div>
   <h1>Agents are black boxes.<br /><em>Peekr makes them transparent.</em></h1>
-  <p class="hero-sub">Like cProfile — but for AI agents. See where time, tokens, and money go, and what each step actually saw and returned.</p>
+  <p class="hero-sub">Like cProfile — but for AI agents. Every LLM call, tool invocation, token count, and error recorded as a tree you can inspect. Two lines to add, no backend required.</p>
   <div class="cta-group">
-    <a href="docs.html" class="btn btn-primary">Read the docs</a>
-    <a href="https://github.com/ashwanijha04/peekr" class="btn btn-secondary">View on GitHub</a>
+    <a href="docs.html" class="btn btn-primary">Get started →</a>
+    <a href="https://github.com/ashwanijha04/peekr" class="btn btn-star">⭐ Star on GitHub</a>
+    <a href="docs.html" class="btn btn-docs">Read the docs</a>
   </div>
   <div class="install-strip">
     <code>pip install peekr</code>
     <button class="copy-btn" onclick="navigator.clipboard.writeText('pip install peekr');this.textContent='Copied!'">Copy</button>
   </div>
+  <p class="hero-meta">
+    <span>Python 3.9+</span>·
+    <span>OpenAI &amp; Anthropic</span>·
+    <span>Sync &amp; async</span>·
+    <span>No signup</span>
+  </p>
 </section>
 
+<!-- HOW IT WORKS -->
+<section class="how">
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">Step 1</div>
+      <h3>Instrument</h3>
+      <p>Call <code>peekr.instrument()</code> once. It patches the OpenAI and Anthropic SDKs automatically — no code changes anywhere else.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">Step 2</div>
+      <h3>Decorate your tools</h3>
+      <p>Add <code>@trace</code> to your tool functions. They become child spans that nest under LLM calls automatically.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">Step 3</div>
+      <h3>Inspect</h3>
+      <p>Run <code>peekr view --io traces.jsonl</code> to see the full tree — inputs, outputs, latency, token counts, and errors.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PAIN SCENARIOS -->
 <section class="pain">
-  <div class="pain-intro">
+  <div class="section-header">
     <h2>A profiler for every layer of your agent</h2>
     <p>CPU profilers only see timing. Agents fail for reasons that have nothing to do with performance.</p>
   </div>
@@ -127,15 +222,17 @@
       <div class="scenario-icon">🔍</div>
       <div>
         <h3>"My agent gave the wrong answer"</h3>
-        <p>See the exact prompt that was sent — not what you think was sent, what was <em>actually</em> sent. Spot bad tool output before it reaches the LLM.</p>
+        <span class="fix">Fix: see what the LLM actually received</span>
+        <p>Not what you think was sent — what was <em>actually</em> sent. Peekr captures every message so you can catch malformed context before it reaches the model.</p>
       </div>
     </div>
     <pre><span class="hl-blue">agent.run</span>  2100ms
    └─ <span class="hl-blue">tool.fetch_user</span>  12ms
          in:  {"user_id": 42}
-         out: <span class="hl-red">null</span>                     ← user not found, agent didn't check
-   └─ <span class="hl-blue">openai.chat</span> [gpt-4o]  2088ms
-         in:  [{"role": "system", "content": <span class="hl-red">"User: null..."</span>}]</pre>
+         out: <span class="hl-red">null</span>                     ← returned null, agent didn't check
+   └─ <span class="hl-blue">openai.chat</span> [gpt-4o]  2088ms  4821tok
+         in:  [{"role": "system", "content": <span class="hl-red">"User profile: null..."</span>}]
+<span class="hl-muted">                                                   ^ LLM received garbage</span></pre>
   </div>
 
   <div class="scenario">
@@ -143,12 +240,14 @@
       <div class="scenario-icon">⏱️</div>
       <div>
         <h3>"My agent is too slow"</h3>
-        <p>The trace shows exactly where time is spent. The bottleneck is almost never the LLM.</p>
+        <span class="fix">Fix: cache or parallelize the right thing</span>
+        <p>The trace shows exactly where time went. Most developers assume the LLM is the bottleneck and start swapping models. It almost never is.</p>
       </div>
     </div>
     <pre><span class="hl-blue">agent.run</span>  4300ms
-   └─ <span class="hl-blue">tool.search_web</span>  <span class="hl-red">3800ms</span>   ← 88% of total time
-   └─ <span class="hl-blue">openai.chat</span>        490ms</pre>
+   └─ <span class="hl-blue">tool.search_web</span>  <span class="hl-red">3800ms</span>   ← 88% of total time. Cache this.
+   └─ <span class="hl-blue">tool.rerank</span>          18ms
+   └─ <span class="hl-blue">openai.chat</span>         490ms   ← not your problem</pre>
   </div>
 
   <div class="scenario">
@@ -156,12 +255,13 @@
       <div class="scenario-icon">💸</div>
       <div>
         <h3>"My API bill is too high"</h3>
-        <p>Token counts per trace reveal the pattern. Growing tokens across runs means unbounded history — summarize after 5 turns and cut costs 60–80%.</p>
+        <span class="fix">Fix: summarize history after 5 turns, cut costs 60–80%</span>
+        <p>Token counts across traces reveal patterns invisible in your code. Growing tokens every run is the signature of unbounded history.</p>
       </div>
     </div>
-    <pre><span class="hl-muted">Trace 1:</span>  18,432 tokens
-<span class="hl-muted">Trace 2:</span>  21,104 tokens
-<span class="hl-muted">Trace 3:</span>  <span class="hl-red">24,891 tokens</span>   ← unbounded growth</pre>
+    <pre><span class="hl-muted">Trace 1:</span>  18,432 tokens   · $0.018
+<span class="hl-muted">Trace 2:</span>  21,104 tokens   · $0.021
+<span class="hl-muted">Trace 3:</span>  <span class="hl-red">24,891 tokens</span>   · <span class="hl-red">$0.025</span>   ← unbounded growth</pre>
   </div>
 
   <div class="scenario">
@@ -169,52 +269,227 @@
       <div class="scenario-icon">🐛</div>
       <div>
         <h3>"It works locally but fails in prod"</h3>
-        <p>The trace shows what tools actually returned. The agent logic is usually fine — the data pipeline isn't.</p>
+        <span class="fix">Fix: the bug is in your data pipeline, not your agent</span>
+        <p>The trace shows what your tools actually returned — not what you assume they returned. Compare local and prod traces side by side.</p>
       </div>
     </div>
-    <pre><span class="hl-blue">tool.fetch_inventory</span>  8ms
-   in:  {"sku": "ABC-123"}
-   out: <span class="hl-red">[]</span>   ← empty in prod, populated locally</pre>
+    <pre><span class="hl-muted"># local</span>   <span class="hl-blue">tool.fetch_inventory</span>  8ms   out: [{"id": 1, "qty": 42}]
+<span class="hl-muted"># prod</span>    <span class="hl-blue">tool.fetch_inventory</span>  8ms   out: <span class="hl-red">[]</span>  ← empty. Data pipeline bug.</pre>
   </div>
 </section>
 
-<section class="demo">
-  <h2>Add it like a profiler. Remove it like a profiler.</h2>
-  <div class="code-card">
-    <div class="code-card-header"><div class="dot"></div><div class="dot"></div><div class="dot"></div> agent.py</div>
-    <pre><span class="kw">import</span> peekr
-peekr.<span class="fn">instrument</span>()  <span class="cm"># patches OpenAI + Anthropic automatically</span>
+<!-- CODE DEMO -->
+<section class="demo" style="margin-bottom: 5rem;">
+  <div class="section-header">
+    <h2>Add it like a profiler. Remove it like a profiler.</h2>
+    <p>Two lines for LLM calls. One decorator for your tools. Nothing else.</p>
+  </div>
+  <div class="demo-grid">
+    <div class="code-card">
+      <div class="code-card-header"><div class="dot"></div><div class="dot"></div><div class="dot"></div> agent.py</div>
+      <pre><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>()
 
 <span class="kw">from</span> peekr <span class="kw">import</span> trace
 <span class="kw">import</span> openai
 
-<span class="cm"># Wrap your tools to include them in the trace tree</span>
 <span class="kw">@</span><span class="fn">trace</span>
 <span class="kw">def</span> <span class="fn">search_web</span>(query: str) -> list:
     <span class="kw">return</span> fetch_results(query)
 
-<span class="cm"># LLM calls traced automatically — no changes needed</span>
+<span class="cm"># LLM calls traced automatically</span>
 openai.chat.completions.<span class="fn">create</span>(
     model=<span class="st">"gpt-4o"</span>,
-    messages=[{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"..."</span>}]
+    messages=[...]
 )</pre>
+    </div>
+    <div class="code-card">
+      <div class="code-card-header"><div class="dot"></div> peekr view --io traces.jsonl</div>
+      <pre><span class="gr">Trace a3f2b1c0  1243ms  891tok</span>
+────────────────────────────────
+<span class="hl-blue">agent.run</span>  1243ms
+  └─ <span class="hl-blue">tool.search_web</span>  210ms
+       in:  "climate policy"
+       out: ["result1", ...]
+  └─ <span class="hl-blue">openai.chat</span> [gpt-4o]
+       1033ms  891tok
+       out: "Based on recent..."</pre>
+    </div>
   </div>
 </section>
 
-<section class="features">
-  <h2>Beyond what a profiler can see</h2>
-  <div class="feature-grid">
-    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Zero config</h3><p>One call patches OpenAI and Anthropic. No wrappers, no accounts, nothing to deploy.</p></div>
-    <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via <code>ContextVar</code>. Works across async without manual passing.</p></div>
-    <div class="feature-card"><div class="feature-icon">📦</div><h3>No backend</h3><p>Writes to a local JSONL file. Nothing leaves your machine until you want it to.</p></div>
-    <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any function — sync or async — to capture inputs, outputs, latency, and errors.</p></div>
-    <div class="feature-card"><div class="feature-icon">🔌</div><h3>Custom exporters</h3><p>Implement one method to ship spans to any backend you choose.</p></div>
-    <div class="feature-card"><div class="feature-icon">🔍</div><h3>CLI viewer</h3><p><code>peekr view --io traces.jsonl</code> renders the full tree with inputs and outputs.</p></div>
+<!-- STORAGE OPTIONS -->
+<section class="storage">
+  <div class="section-header">
+    <h2>Scales with you</h2>
+    <p>Start local. Graduate to SQLite when you need queries. Bring your own backend when you're ready.</p>
   </div>
+  <div class="storage-grid">
+    <div class="storage-card">
+      <div class="storage-tag default">Default</div>
+      <h3>JSONL</h3>
+      <p>Writes one span per line. Grep-able, diff-able, works everywhere. Perfect for local debugging.</p>
+      <code>peekr.instrument()</code>
+    </div>
+    <div class="storage-card featured">
+      <div class="storage-tag new">New</div>
+      <h3>SQLite</h3>
+      <p>WAL mode for multi-process writes. Query across runs with SQL. Works inside Docker and CI.</p>
+      <code>peekr.instrument(storage="sqlite")</code>
+    </div>
+    <div class="storage-card">
+      <div class="storage-tag advanced">Advanced</div>
+      <h3>Custom</h3>
+      <p>Implement one <code>export(span)</code> method to ship spans to Datadog, your own backend, or anywhere else.</p>
+      <code>add_exporter(MyExporter())</code>
+    </div>
+  </div>
+</section>
+
+<!-- SQL POWER SECTION -->
+<section class="sql">
+  <div class="sql-intro">
+    <h2>Query your agent like a database</h2>
+    <p>SQLite storage means every trace is queryable. No dashboard needed.</p>
+  </div>
+  <div class="sql-grid">
+    <div class="sql-card">
+      <div class="sql-card-label">Find your slowest tool calls</div>
+      <pre>SELECT name, ROUND(AVG(duration_ms)) avg_ms
+FROM spans
+GROUP BY name
+ORDER BY avg_ms DESC;</pre>
+    </div>
+    <div class="sql-card">
+      <div class="sql-card-label">Track token spend by model</div>
+      <pre>SELECT json_extract(attributes,'$.model') model,
+       SUM(json_extract(attributes,'$.tokens_total')) tokens
+FROM spans GROUP BY model;</pre>
+    </div>
+    <div class="sql-card">
+      <div class="sql-card-label">Find all errors</div>
+      <pre>SELECT name, trace_id,
+       json_extract(attributes,'$.error') msg
+FROM spans
+WHERE status = 'error';</pre>
+    </div>
+    <div class="sql-card">
+      <div class="sql-card-label">Trace cost growth over time</div>
+      <pre>SELECT trace_id,
+       SUM(json_extract(attributes,'$.tokens_total')) total
+FROM spans
+GROUP BY trace_id
+ORDER BY start_time;</pre>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare">
+  <div class="section-header">
+    <h2>How it compares</h2>
+    <p>Most alternatives either require an account, tie you to a framework, or don't capture LLM context at all.</p>
+  </div>
+  <div class="compare-wrap">
+    <table class="compare-table">
+      <tr>
+        <th></th>
+        <th>Print statements</th>
+        <th>LangSmith</th>
+        <th>OpenTelemetry</th>
+        <th class="us">peekr</th>
+      </tr>
+      <tr>
+        <td>Zero config</td>
+        <td class="partial">Partial</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>No account required</td>
+        <td class="yes">Yes</td>
+        <td class="no">No</td>
+        <td class="yes">Yes</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Works with any framework</td>
+        <td class="yes">Yes</td>
+        <td class="no">LangChain only</td>
+        <td class="yes">Yes</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Captures token counts</td>
+        <td class="no">No</td>
+        <td class="yes">Yes</td>
+        <td class="no">No</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Captures inputs &amp; outputs</td>
+        <td class="partial">Manual</td>
+        <td class="yes">Yes</td>
+        <td class="no">No</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Parent/child span tree</td>
+        <td class="no">No</td>
+        <td class="yes">Yes</td>
+        <td class="yes">Yes</td>
+        <td class="us yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Queryable locally</td>
+        <td class="no">No</td>
+        <td class="no">Cloud only</td>
+        <td class="partial">Partial</td>
+        <td class="us yes">Yes (SQLite)</td>
+      </tr>
+      <tr>
+        <td>Data stays on your machine</td>
+        <td class="yes">Yes</td>
+        <td class="no">No</td>
+        <td class="partial">Depends</td>
+        <td class="us yes">Yes</td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="section-header">
+    <h2>Everything you need. Nothing you don't.</h2>
+  </div>
+  <div class="feature-grid">
+    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Zero config</h3><p>One call patches OpenAI and Anthropic. No wrappers, no env vars, no accounts.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via Python's <code>ContextVar</code>. Works across <code>async/await</code> without manual threading.</p></div>
+    <div class="feature-card"><div class="feature-icon">🗄️</div><h3>SQLite storage</h3><p>WAL mode for concurrent writes. Query traces across runs directly with SQL.</p></div>
+    <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any sync or async function. Captures inputs, outputs, latency, and errors.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy first</h3><p>Nothing leaves your machine by default. Use <code>capture_io=False</code> for sensitive functions.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔌</div><h3>Custom exporters</h3><p>One method to ship spans to Datadog, Grafana, or your own backend.</p></div>
+    <div class="feature-card"><div class="feature-icon">🖥️</div><h3>CLI viewer</h3><p><code>peekr view --io</code> renders the full span tree with inputs and outputs in your terminal.</p></div>
+    <div class="feature-card"><div class="feature-icon">🧪</div><h3>Fully tested</h3><p>30 tests covering context propagation, concurrent writes, async decorators, and more.</p></div>
+  </div>
+</section>
+
+<!-- STAR CTA -->
+<section class="star-cta" style="max-width: 860px;">
+  <h2>If peekr saved you a debugging session,<br />give it a star ⭐</h2>
+  <p>It's open source, free forever, and takes 3 seconds. A star helps other developers find it and keeps the project growing.</p>
+  <a href="https://github.com/ashwanijha04/peekr" class="btn-star-lg">⭐ Star on GitHub</a>
 </section>
 
 <footer>
-  <p>MIT License · <a href="https://github.com/ashwanijha04/peekr">GitHub</a> · <a href="https://pypi.org/project/peekr/">PyPI</a> · <a href="docs.html">Docs</a></p>
+  <a href="index.html">Home</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com/ashwanijha04/peekr">GitHub</a>
+  <a href="https://pypi.org/project/peekr/">PyPI</a>
+  <br /><br />
+  <span>MIT License · Built in public</span>
 </footer>
 
 </body>

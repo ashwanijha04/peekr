@@ -168,14 +168,47 @@ pip install "peekr[all]"            # both
 
 ---
 
-## Options
+## Storage options
 
 ```python
-peekr.instrument(
-    console=True,                # print spans live (default: True)
-    jsonl_path="traces.jsonl",   # write to file (default: "traces.jsonl")
-    jsonl_path=None,             # disable file output
-)
+peekr.instrument()                      # JSONL — default, grep-able
+peekr.instrument(storage="sqlite")      # SQLite — queryable, multi-process safe
+peekr.instrument(storage="both")        # both at once
+```
+
+### SQLite — query your traces with SQL
+
+SQLite storage uses WAL mode so multiple processes (Docker, CI, parallel agents) can write safely at the same time. And because it's SQLite, you can query across runs:
+
+```bash
+# slowest tool calls
+sqlite3 traces.db "
+  SELECT name, ROUND(AVG(duration_ms)) avg_ms
+  FROM spans GROUP BY name ORDER BY avg_ms DESC;"
+
+# token spend by model
+sqlite3 traces.db "
+  SELECT json_extract(attributes,'$.model') model,
+         SUM(json_extract(attributes,'$.tokens_total')) tokens
+  FROM spans GROUP BY model;"
+
+# all errors
+sqlite3 traces.db "
+  SELECT name, trace_id, json_extract(attributes,'$.error') msg
+  FROM spans WHERE status = 'error';"
+
+# cost growth over time
+sqlite3 traces.db "
+  SELECT trace_id,
+         SUM(json_extract(attributes,'$.tokens_total')) total
+  FROM spans GROUP BY trace_id ORDER BY start_time;"
+```
+
+View SQLite traces the same way as JSONL:
+
+```bash
+peekr view traces.db
+peekr view --io traces.db
 ```
 
 ---
