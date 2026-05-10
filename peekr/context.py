@@ -21,7 +21,7 @@ def get_or_create_trace_id() -> str:
     return trace_id
 
 
-def start_span(name: str) -> tuple[Span, object, object]:
+def start_span(name: str) -> tuple[Span, object]:
     trace_id = get_or_create_trace_id()
     parent = get_current_span()
     span = Span(
@@ -29,6 +29,17 @@ def start_span(name: str) -> tuple[Span, object, object]:
         trace_id=trace_id,
         parent_id=parent.span_id if parent else None,
     )
+    # Attach session metadata if a session is active
+    try:
+        from .session import get_session_id, get_user_id
+        sid = get_session_id()
+        uid = get_user_id()
+        if sid:
+            span.attributes["session_id"] = sid
+        if uid:
+            span.attributes["user_id"] = uid
+    except ImportError:
+        pass
     span_token = _current_span.set(span)
     return span, span_token
 

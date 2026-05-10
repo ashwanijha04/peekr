@@ -7,7 +7,8 @@ from collections import defaultdict
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: peekr view [--io] <traces.jsonl|traces.db>")
+        print("Usage: peekr <command> [options]")
+        print("Commands: view, replay")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -17,9 +18,52 @@ def main():
         args = [a for a in args if not a.startswith("--")]
         path = args[0] if args else _default_path()
         view_traces(path, show_io=show_io)
+    elif cmd == "replay":
+        _cmd_replay(sys.argv[2:])
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
+
+
+def _cmd_replay(args: list[str]) -> None:
+    """Handle: peekr replay <trace_id> [--db traces.db] [--jsonl traces.jsonl]"""
+    if not args or args[0].startswith("--"):
+        print("Usage: peekr replay <trace_id> [--db traces.db] [--jsonl traces.jsonl]")
+        sys.exit(1)
+
+    trace_id = args[0]
+    rest = args[1:]
+
+    db_path = None
+    jsonl_path = None
+    i = 0
+    while i < len(rest):
+        if rest[i] == "--db" and i + 1 < len(rest):
+            db_path = rest[i + 1]
+            i += 2
+        elif rest[i] == "--jsonl" and i + 1 < len(rest):
+            jsonl_path = rest[i + 1]
+            i += 2
+        else:
+            i += 1
+
+    from .replay import replay_trace  # noqa: PLC0415
+    try:
+        new_trace_id = replay_trace(
+            trace_id=trace_id,
+            db_path=db_path,
+            jsonl_path=jsonl_path,
+        )
+    except Exception as exc:
+        print(f"Replay failed: {exc}")
+        sys.exit(1)
+
+    print(f"Replayed trace {trace_id[:8]} → new trace {new_trace_id[:8]}")
+    print()
+
+    # Show the new trace from the same storage
+    storage_path = db_path or jsonl_path or _default_path()
+    view_traces(storage_path)
 
 
 def _default_path() -> str:
