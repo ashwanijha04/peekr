@@ -8,7 +8,7 @@ from collections import defaultdict
 def main():
     if len(sys.argv) < 2:
         print("Usage: peekr <command> [options]")
-        print("Commands: view, replay")
+        print("Commands: view, replay, cost")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -20,6 +20,11 @@ def main():
         view_traces(path, show_io=show_io)
     elif cmd == "replay":
         _cmd_replay(sys.argv[2:])
+    elif cmd == "cost":
+        args = sys.argv[2:]
+        args = [a for a in args if not a.startswith("--")]
+        path = args[0] if args else _default_path()
+        _cmd_cost(path)
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
@@ -64,6 +69,121 @@ def _cmd_replay(args: list[str]) -> None:
     # Show the new trace from the same storage
     storage_path = db_path or jsonl_path or _default_path()
     view_traces(storage_path)
+
+
+def _cmd_cost(path: str) -> None:
+    """peekr cost <traces.jsonl|traces.db> — cost breakdown + top-10 hotspots."""
+    if path.endswith(".db"):
+        spans = _read_sqlite(path)
+    else:
+        spans = _read_jsonl(path)
+
+    if not spans:
+        return
+
+    # ── per-span cost records (LLM calls only) ────────────────────────────────
+    records = []
+    for s in spans:
+        attrs = s.get("attributes") or {}
+        inp = attrs.get("tokens_input", 0)
+        out = attrs.get("tokens_output", 0)
+        dur = s.get("duration_ms") or 0.0
+        cost = (inp / 1_000_000 * 0.80) + (out / 1_000_000 * 4.00)
+        records.append({
+            "name": s["name"],
+            "model": attrs.get("model", ""),
+            "status": s.get("status", "ok"),
+            "tokens_input": inp,
+            "tokens_output": out,
+            "tokens_total": inp + out,
+            "cost": cost,
+            "duration_ms": dur,
+        })
+
+    llm_records = [r for r in records if r["tokens_total"] > 0]
+    total_cost = sum(r["cost"] for r in llm_records)
+    total_input = sum(r["tokens_input"] for r in llm_records)
+    total_output = sum(r["tokens_output"] for r in llm_records)
+    total_dur = sum(r["duration_ms"] for r in llm_records)
+    errors = sum(1 for r in records if r["status"] == "error")
+
+    # ── summary ───────────────────────────────────────────────────────────────
+    W = 60
+    print()
+    print("─" * W)
+    print(f"  peekr cost  ·  {path}")
+    print("─" * W)
+    print(f"  Total spans        : {len(spans):,}")
+    print(f"  LLM calls          : {len(llm_records):,}")
+    print(f"  Errors             : {errors}")
+    print(f"  Total input tokens : {total_input:,}")
+    print(f"  Total output tokens: {total_output:,}")
+    print(f"  Total LLM time     : {total_dur/1000:.1f}s")
+    print(f"  Total cost (est.)  : ${total_cost:.5f}  (Haiku rates: $0.80/$4.00 per M)")
+    print("─" * W)
+
+    # ── breakdown by operation ─────────────────────────────────────────────────
+    by_op: dict[str, dict] = defaultdict(lambda: {
+        "calls": 0, "input": 0, "output": 0, "cost": 0.0,
+        "duration_ms": 0.0, "errors": 0,
+    })
+    for r in records:
+        key = f"{r['name']}" + (f"  [{r['model']}]" if r["model"] else "")
+        by_op[key]["calls"] += 1
+        by_op[key]["input"] += r["tokens_input"]
+        by_op[key]["output"] += r["tokens_output"]
+        by_op[key]["cost"] += r["cost"]
+        by_op[key]["duration_ms"] += r["duration_ms"]
+        by_op[key]["errors"] += 1 if r["status"] == "error" else 0
+
+    print()
+    print("  Cost by operation:")
+    print(f"  {'Operation':<48} {'Calls':>5}  {'Cost':>9}  {'Avg/call':>9}  {'Avg ms':>7}")
+    print("  " + "─" * (W - 2))
+    for op, s in sorted(by_op.items(), key=lambda x: -x[1]["cost"]):
+        avg_cost = s["cost"] / max(s["calls"], 1)
+        avg_ms = s["duration_ms"] / max(s["calls"], 1)
+        err_flag = "  \033[31m(!)\033[0m" if s["errors"] else ""
+        print(f"  {op:<48} {s['calls']:>5}  ${s['cost']:>8.5f}  ${avg_cost:>8.5f}  {avg_ms:>6.0f}ms{err_flag}")
+
+    # ── top 10 hotspots ───────────────────────────────────────────────────────
+    def _hotspot_score(r: dict) -> float:
+        # normalise cost and latency, weight cost 60% / latency 40%
+        max_cost = max((x["cost"] for x in llm_records), default=1) or 1
+        max_dur = max((x["duration_ms"] for x in llm_records), default=1) or 1
+        return 0.6 * (r["cost"] / max_cost) + 0.4 * (r["duration_ms"] / max_dur)
+
+    if llm_records:
+        ranked = sorted(llm_records, key=_hotspot_score, reverse=True)[:10]
+        print()
+        print("  Top 10 hottest calls  (60% cost · 40% latency):")
+        print(f"  {'#':<3} {'Operation':<40} {'In':>7} {'Out':>6} {'Cost':>9} {'ms':>7}  {'Model'}")
+        print("  " + "─" * (W - 2))
+        for i, r in enumerate(ranked, 1):
+            err = " \033[31m!\033[0m" if r["status"] == "error" else ""
+            print(
+                f"  {i:<3} {r['name']:<40} "
+                f"{r['tokens_input']:>7,} {r['tokens_output']:>6,} "
+                f"${r['cost']:>8.5f} {r['duration_ms']:>6.0f}ms  "
+                f"{r['model']}{err}"
+            )
+
+        # top 5 slowest (if different from hottest)
+        slowest = sorted(llm_records, key=lambda x: -x["duration_ms"])[:5]
+        if slowest[0] != ranked[0]:
+            print()
+            print("  Top 5 slowest calls:")
+            print(f"  {'#':<3} {'Operation':<40} {'ms':>7}  {'Tokens':>7}  {'Cost':>9}")
+            print("  " + "─" * (W - 2))
+            for i, r in enumerate(slowest, 1):
+                print(
+                    f"  {i:<3} {r['name']:<40} "
+                    f"{r['duration_ms']:>6.0f}ms  "
+                    f"{r['tokens_total']:>7,}  "
+                    f"${r['cost']:>8.5f}"
+                )
+
+    print()
 
 
 def _default_path() -> str:
