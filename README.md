@@ -94,8 +94,9 @@ Decorated functions nest automatically under whatever called them — no wiring 
 ### Step 3 — View the trace
 
 ```bash
-peekr view traces.jsonl          # tree view
+peekr view traces.jsonl          # tree view — every trace, nested
 peekr view --io traces.jsonl     # include inputs and outputs
+peekr cost traces.jsonl          # cost breakdown + top-10 hotspot calls
 ```
 
 ```
@@ -111,6 +112,45 @@ agent.run  1243ms
 ```
 
 Now you can see exactly what happened — what went in, what came out, how long each step took, how many tokens were used.
+
+---
+
+### `peekr cost` — find what's expensive
+
+`peekr cost` reads a traces file and answers: where did my money and time go?
+
+```bash
+peekr cost traces.jsonl
+```
+
+```
+────────────────────────────────────────────────────────────
+  peekr cost  ·  traces.jsonl
+────────────────────────────────────────────────────────────
+  Total spans        : 8,022
+  LLM calls          : 85
+  Errors             : 0
+  Total input tokens : 130,807
+  Total output tokens: 10,274
+  Total LLM time     : 161.9s
+  Total cost (est.)  : $0.14574  (Haiku rates: $0.80/$4.00 per M)
+────────────────────────────────────────────────────────────
+
+  Cost by operation:
+  Operation                                        Calls       Cost   Avg/call   Avg ms
+  ──────────────────────────────────────────────────
+  anthropic.messages  [claude-haiku-4-5-20251001]     85  $ 0.14574  $ 0.00171    1905ms
+  tool.search_web                                      42  $ 0.00000  $ 0.00000     210ms
+
+  Top 10 hottest calls  (60% cost · 40% latency):
+  #   Operation                           In      Out      Cost      ms  Model
+  ──────────────────────────────────────────────────
+  1   anthropic.messages               5,066      264 $ 0.00511   2965ms  claude-haiku-4-5-20251001
+  2   anthropic.messages               3,924      376 $ 0.00464   3458ms  claude-haiku-4-5-20251001
+  ...
+```
+
+The top-10 list ranks by a composite score (60% cost, 40% latency) so a call that's both slow and expensive ranks above one that's merely expensive. Use it to decide what to cache, compress, or swap for a cheaper model.
 
 ---
 
@@ -248,6 +288,7 @@ View SQLite traces the same way as JSONL:
 ```bash
 peekr view traces.db
 peekr view --io traces.db
+peekr cost traces.db
 ```
 
 ---
