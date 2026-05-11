@@ -157,6 +157,17 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 
 ---
 
+## What's in v0.2
+
+| Capability | API |
+|---|---|
+| **Session tracing** | `with peekr.session(user_id="u1"):` |
+| **Alerts** | `instrument(alerts=[peekr.alert.ErrorRate(0.05)])` |
+| **LLM-as-judge eval** | `instrument(evaluators=[peekr.eval.Rubric("Be concise")])` |
+| **Feedback + fine-tuning export** | `peekr.feedback(trace_id, rating="good")` |
+| **A/B experiments** | `@peekr.experiment(variants=["control", "test"])` |
+| **Trace replay** | `peekr replay <trace_id>` |
+
 ## Supported clients
 
 | Provider | SDK | Install |

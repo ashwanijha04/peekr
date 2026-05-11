@@ -506,16 +506,21 @@ ORDER BY start_time;</pre>
 <section class="features">
   <div class="section-header">
     <h2>Everything you need. Nothing you don't.</h2>
+    <p>From basic tracing to evals, experiments, and a data flywheel — all in one library.</p>
   </div>
   <div class="feature-grid">
-    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Zero config</h3><p>One call patches OpenAI and Anthropic. No wrappers, no env vars, no accounts.</p></div>
+    <div class="feature-card"><div class="feature-icon">⚡</div><h3>Zero config</h3><p>One call patches OpenAI, Anthropic, and Bedrock. No wrappers, no env vars, no accounts.</p></div>
     <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via Python's <code>ContextVar</code>. Works across <code>async/await</code> without manual threading.</p></div>
     <div class="feature-card"><div class="feature-icon">🗄️</div><h3>SQLite storage</h3><p>WAL mode for concurrent writes. Query traces across runs directly with SQL.</p></div>
     <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any sync or async function. Captures inputs, outputs, latency, and errors.</p></div>
-    <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy first</h3><p>Nothing leaves your machine by default. Use <code>capture_io=False</code> for sensitive functions.</p></div>
+    <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id)</code> groups spans across multi-turn conversations by user.</p></div>
+    <div class="feature-card"><div class="feature-icon">🚨</div><h3>Alerts</h3><p>Fire when error rate, latency, token spend, or cost spikes cross your threshold.</p></div>
+    <div class="feature-card"><div class="feature-icon">🧠</div><h3>LLM-as-judge eval</h3><p>Score every LLM response automatically with <code>Rubric</code>, <code>NotEmpty</code>, and <code>NoError</code> evaluators.</p></div>
+    <div class="feature-card"><div class="feature-icon">👍</div><h3>Feedback + export</h3><p>Rate traces good/bad. Export labelled data as OpenAI fine-tuning JSONL in one command.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔬</div><h3>A/B experiments</h3><p><code>@peekr.experiment(variants=[...])</code> routes traffic and tags spans. Analyse results with SQL.</p></div>
+    <div class="feature-card"><div class="feature-icon">⏮️</div><h3>Trace replay</h3><p>Re-run any stored trace with the same inputs. Debug production issues locally.</p></div>
     <div class="feature-card"><div class="feature-icon">🔌</div><h3>Custom exporters</h3><p>One method to ship spans to Datadog, Grafana, or your own backend.</p></div>
-    <div class="feature-card"><div class="feature-icon">🖥️</div><h3>CLI viewer</h3><p><code>peekr view --io</code> renders the full span tree with inputs and outputs in your terminal.</p></div>
-    <div class="feature-card"><div class="feature-icon">🧪</div><h3>Fully tested</h3><p>30 tests covering context propagation, concurrent writes, async decorators, and more.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy first</h3><p>Nothing leaves your machine by default. Use <code>capture_io=False</code> for sensitive functions.</p></div>
   </div>
 </section>
 

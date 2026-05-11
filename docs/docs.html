@@ -114,6 +114,15 @@
       <a href="#exporters">Custom exporters</a>
     </div>
     <div class="sidebar-section">
+      <div class="sidebar-label">Features</div>
+      <a href="#sessions">Sessions</a>
+      <a href="#alerts">Alerts</a>
+      <a href="#eval">Eval (LLM-as-judge)</a>
+      <a href="#feedback">Feedback + export</a>
+      <a href="#experiments">A/B experiments</a>
+      <a href="#replay">Trace replay</a>
+    </div>
+    <div class="sidebar-section">
       <div class="sidebar-label">Reference</div>
       <a href="#span-fields">Span fields</a>
     </div>
@@ -137,10 +146,19 @@
       </div>
       <div class="toc-section"><div class="toc-label">API reference</div>
         <a href="#instrument">instrument()</a>
+        <a href="#sqlite">SQLite storage</a>
         <a href="#trace-decorator">@trace</a>
         <a href="#manual-spans">Manual spans</a>
         <a href="#cli">CLI viewer</a>
         <a href="#exporters">Custom exporters</a>
+      </div>
+      <div class="toc-section"><div class="toc-label">Features</div>
+        <a href="#sessions">Sessions</a>
+        <a href="#alerts">Alerts</a>
+        <a href="#eval">Eval (LLM-as-judge)</a>
+        <a href="#feedback">Feedback + export</a>
+        <a href="#experiments">A/B experiments</a>
+        <a href="#replay">Trace replay</a>
         <a href="#span-fields">Span fields</a>
       </div>
     </details>
@@ -380,7 +398,143 @@ peekr.<span class="fn">instrument</span>()
       <tr><td><code>attributes.input</code></td><td>string</td><td>Serialized function args (truncated)</td></tr>
       <tr><td><code>attributes.output</code></td><td>string</td><td>Serialized return value (truncated)</td></tr>
       <tr><td><code>attributes.error</code></td><td>string</td><td>Exception message if status is "error"</td></tr>
+      <tr><td><code>attributes.session_id</code></td><td>string</td><td>Set when span is inside a peekr.session()</td></tr>
+      <tr><td><code>attributes.user_id</code></td><td>string</td><td>Set when span is inside a peekr.session(user_id=...)</td></tr>
+      <tr><td><code>attributes.eval_scores</code></td><td>dict</td><td>Evaluator name → score (0.0–1.0) when evaluators are configured</td></tr>
+      <tr><td><code>attributes.experiment_variant</code></td><td>string</td><td>Variant name when inside a @peekr.experiment</td></tr>
     </table></div>
+
+    <!-- SESSIONS -->
+    <h2 id="sessions">Sessions</h2>
+    <p>Group all spans for a user or conversation under a shared <code>session_id</code> and <code>user_id</code>. Uses <code>ContextVar</code> so it propagates correctly across async code.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+<span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"user_123"</span>, session_id=<span class="st">"sess_abc"</span>):
+    <span class="fn">run_agent</span>()  <span class="cm"># all spans tagged with user_id + session_id</span>
+
+<span class="cm"># session_id auto-generated if not provided</span>
+<span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"user_123"</span>):
+    <span class="fn">run_agent</span>()</code></pre>
+    <p>Query by user in SQLite:</p>
+    <pre><div class="pre-header">sql</div><code>SELECT trace_id, AVG(duration_ms), SUM(json_extract(attributes,'$.tokens_total'))
+FROM spans
+WHERE json_extract(attributes,'$.user_id') = 'user_123'
+GROUP BY trace_id;</code></pre>
+
+    <!-- ALERTS -->
+    <h2 id="alerts">Alerts</h2>
+    <p>Alerts fire after each complete trace (identified by the root span). Pass them to <code>instrument()</code>:</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(alerts=[
+    peekr.alert.<span class="fn">ErrorRate</span>(threshold=<span class="fn">0.05</span>, window=<span class="fn">100</span>),  <span class="cm"># &gt;5% errors in last 100 traces</span>
+    peekr.alert.<span class="fn">CostSpike</span>(multiplier=<span class="fn">2.0</span>),               <span class="cm"># tokens 2× above rolling avg</span>
+    peekr.alert.<span class="fn">LatencyP95</span>(ms=<span class="fn">5000</span>),                     <span class="cm"># p95 latency &gt; 5s</span>
+    peekr.alert.<span class="fn">TokenGrowth</span>(runs=<span class="fn">5</span>),                     <span class="cm"># growing 5 consecutive runs</span>
+])</code></pre>
+    <p>Override <code>on_trigger</code> to send to Slack, PagerDuty, or anywhere:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">class</span> <span class="fn">SlackAlert</span>(peekr.alert.<span class="fn">ErrorRate</span>):
+    <span class="kw">def</span> <span class="fn">on_trigger</span>(<span class="kw">self</span>, message: str) -> <span class="kw">None</span>:
+        slack.<span class="fn">send</span>(<span class="st">f"#alerts: {message}"</span>)
+
+peekr.<span class="fn">instrument</span>(alerts=[<span class="fn">SlackAlert</span>(threshold=<span class="fn">0.05</span>)])</code></pre>
+    <div class="table-wrap"><table>
+      <tr><th>Alert</th><th>Triggers when</th><th>Key params</th></tr>
+      <tr><td><code>ErrorRate</code></td><td>Error % in last N traces &gt; threshold</td><td>threshold, window=100</td></tr>
+      <tr><td><code>CostSpike</code></td><td>This trace tokens &gt; multiplier × rolling avg</td><td>multiplier, window=50</td></tr>
+      <tr><td><code>LatencyP95</code></td><td>p95 span latency in trace &gt; ms</td><td>ms</td></tr>
+      <tr><td><code>TokenGrowth</code></td><td>Token count strictly increasing for N runs</td><td>runs=5</td></tr>
+    </table></div>
+
+    <!-- EVAL -->
+    <h2 id="eval">Eval — LLM-as-judge</h2>
+    <p>Evaluators run after each LLM span completes and write scores to <code>span.attributes["eval_scores"]</code>. A <code>_in_eval</code> guard prevents infinite recursion.</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(evaluators=[
+    peekr.eval.<span class="fn">Rubric</span>(<span class="st">"Be concise and factually accurate"</span>),
+    peekr.eval.<span class="fn">NotEmpty</span>(),   <span class="cm"># output must be non-empty</span>
+    peekr.eval.<span class="fn">NoError</span>(),    <span class="cm"># span must have status=ok</span>
+])</code></pre>
+    <p>Query scores in SQLite:</p>
+    <pre><div class="pre-header">sql</div><code>SELECT name, AVG(json_extract(attributes,'$.eval_scores.Rubric')) rubric_avg
+FROM spans WHERE json_extract(attributes,'$.eval_scores') IS NOT NULL
+GROUP BY name;</code></pre>
+    <p>Write your own evaluator:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.eval <span class="kw">import</span> BaseEvaluator
+
+<span class="kw">class</span> <span class="fn">LengthCheck</span>(BaseEvaluator):
+    <span class="kw">def</span> <span class="fn">evaluate</span>(<span class="kw">self</span>, span) -> float:
+        output = span.attributes.<span class="fn">get</span>(<span class="st">"output"</span>, <span class="st">""</span>)
+        <span class="kw">return</span> <span class="fn">1.0</span> <span class="kw">if</span> <span class="fn">len</span>(output) < <span class="fn">500</span> <span class="kw">else</span> <span class="fn">0.0</span></code></pre>
+    <div class="table-wrap"><table>
+      <tr><th>Evaluator</th><th>What it checks</th><th>Requires</th></tr>
+      <tr><td><code>Rubric(criteria)</code></td><td>LLM scores output against your criteria (0.0–1.0)</td><td>openai or anthropic SDK</td></tr>
+      <tr><td><code>NotEmpty()</code></td><td>Output attribute is non-empty string</td><td>Nothing</td></tr>
+      <tr><td><code>NoError()</code></td><td>Span status is "ok"</td><td>Nothing</td></tr>
+    </table></div>
+
+    <!-- FEEDBACK -->
+    <h2 id="feedback">Feedback + export</h2>
+    <p>Label traces as good or bad. Export labelled data as a fine-tuning dataset.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+<span class="cm"># Rate a trace</span>
+peekr.<span class="fn">feedback</span>(trace_id=<span class="st">"a3f2b1c0..."</span>, rating=<span class="st">"good"</span>, note=<span class="st">"perfect answer"</span>)
+peekr.<span class="fn">feedback</span>(trace_id=<span class="st">"b2e4c8f1..."</span>, rating=<span class="st">"bad"</span>,  note=<span class="st">"hallucinated"</span>)
+
+<span class="cm"># Export good traces as OpenAI fine-tuning data</span>
+peekr.<span class="fn">export_feedback</span>(
+    db_path=<span class="st">"traces.db"</span>,
+    filter=<span class="st">"good"</span>,
+    output=<span class="st">"training.jsonl"</span>,
+    format=<span class="st">"openai-ft"</span>,   <span class="cm"># or "raw"</span>
+)</code></pre>
+    <p>The <code>openai-ft</code> format produces one JSON object per trace:</p>
+    <pre><div class="pre-header">training.jsonl</div><code>{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}</code></pre>
+
+    <!-- EXPERIMENTS -->
+    <h2 id="experiments">A/B experiments</h2>
+    <p>Route traffic between variants and tag each span. Analyse results with SQL — no separate tracking tool needed.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> experiment
+
+<span class="cm"># List variants — equal split by default</span>
+<span class="kw">@</span><span class="fn">experiment</span>(variants=[<span class="st">"control"</span>, <span class="st">"test_v2"</span>])
+<span class="kw">def</span> <span class="fn">run_agent</span>(query: str, variant: str):
+    model = <span class="st">"gpt-4o"</span> <span class="kw">if</span> variant == <span class="st">"control"</span> <span class="kw">else</span> <span class="st">"claude-opus-4-5"</span>
+    <span class="kw">return</span> <span class="fn">call_llm</span>(model, query)
+
+<span class="cm"># Dict variants — passes config too</span>
+<span class="kw">@</span><span class="fn">experiment</span>(variants={
+    <span class="st">"control"</span>: {<span class="st">"model"</span>: <span class="st">"gpt-4o"</span>},
+    <span class="st">"test"</span>:    {<span class="st">"model"</span>: <span class="st">"claude-opus-4-5"</span>},
+})
+<span class="kw">def</span> <span class="fn">run_agent</span>(query: str, variant: str, variant_config: dict):
+    <span class="kw">return</span> <span class="fn">call_llm</span>(variant_config[<span class="st">"model"</span>], query)</code></pre>
+    <p>Analyse in SQLite:</p>
+    <pre><div class="pre-header">sql</div><code>SELECT json_extract(attributes,'$.experiment_variant') variant,
+       COUNT(*) runs,
+       AVG(CASE WHEN status='error' THEN 1.0 ELSE 0.0 END) error_rate,
+       AVG(json_extract(attributes,'$.tokens_total')) avg_tokens,
+       AVG(duration_ms) avg_ms
+FROM spans
+WHERE json_extract(attributes,'$.experiment_variant') IS NOT NULL
+GROUP BY variant;</code></pre>
+
+    <!-- REPLAY -->
+    <h2 id="replay">Trace replay</h2>
+    <p>Re-run a stored trace with the same inputs. Useful for reproducing production bugs locally or verifying a fix against a real failure.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.replay <span class="kw">import</span> replay_trace
+
+<span class="cm"># Re-run from SQLite</span>
+new_trace_id = <span class="fn">replay_trace</span>(trace_id=<span class="st">"a3f2b1c0..."</span>, db_path=<span class="st">"traces.db"</span>)
+<span class="fn">print</span>(<span class="st">f"New trace: {new_trace_id}"</span>)
+
+<span class="cm"># Re-run from JSONL</span>
+new_trace_id = <span class="fn">replay_trace</span>(trace_id=<span class="st">"a3f2b1c0..."</span>, jsonl_path=<span class="st">"traces.jsonl"</span>)</code></pre>
+    <p>Or use the CLI:</p>
+    <pre><div class="pre-header">terminal</div><code>peekr replay a3f2b1c0
+peekr replay a3f2b1c0 --db traces.db
+peekr replay a3f2b1c0 --jsonl traces.jsonl</code></pre>
+    <div class="callout">Replay re-runs the stored LLM inputs through the live SDK. The agent itself is not re-invoked — only the LLM calls are replayed. This means tool calls are not replicated, but you get a new trace showing exactly what the model produces with those inputs today.</div>
+
   </main>
 </div>
 
