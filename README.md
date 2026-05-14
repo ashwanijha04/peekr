@@ -210,13 +210,23 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 
 ## Supported clients
 
+**LLM SDKs**
+
 | Provider | SDK | Install |
 |---|---|---|
 | **OpenAI** | `openai` | `pip install "peekr[openai]"` |
 | **Anthropic** | `anthropic` | `pip install "peekr[anthropic]"` |
 | **AWS Bedrock** | `boto3` | `pip install "peekr[bedrock]"` |
 
-All three auto-instrument with the same two lines — `peekr.instrument()` detects whichever SDKs are installed and patches them. Streaming is supported for all three.
+**Agent frameworks**
+
+| Framework | Package | Install |
+|---|---|---|
+| **LangChain / LangGraph** | `langchain-core` | `pip install "peekr[langchain]"` |
+| **LlamaIndex** | `llama-index-core` | `pip install "peekr[llamaindex]"` |
+| **CrewAI** | `crewai` | `pip install "peekr[crewai]"` |
+
+All auto-instrument with the same two lines — `peekr.instrument()` detects whichever SDKs and frameworks are installed and patches them. Streaming is supported across all LLM SDKs; frameworks emit chain / tool / retriever / agent / LLM spans nested in the order they actually executed.
 
 ```python
 import peekr
@@ -235,6 +245,35 @@ import boto3
 boto3.client("bedrock-runtime").converse(modelId="anthropic.claude-3-haiku-20240307-v1:0", messages=[...])
 ```
 
+### Framework traces
+
+For agent frameworks, peekr installs a callback handler / monkey-patches the execution surface so every chain, tool, retriever, agent step and LLM call shows up as its own span — nested in the order it actually executed.
+
+```python
+import peekr
+peekr.instrument()
+
+# LangChain — chain → tool → llm spans, all nested
+from langchain.agents import AgentExecutor
+agent_executor.invoke({"input": "what's the weather in NYC?"})
+
+# LlamaIndex — query → retrieve → llm spans
+from llama_index.core import VectorStoreIndex
+index.as_query_engine().query("summarize this doc")
+
+# CrewAI — crew.kickoff → task.execute → agent.execute_task → llm spans
+from crewai import Crew
+Crew(agents=[...], tasks=[...]).kickoff()
+```
+
+```
+crewai.crew.kickoff                       3.4s
+  └─ crewai.task.execute                  3.4s   task=plan_trip
+       └─ crewai.agent.execute_task       3.4s   agent=planner
+            └─ openai.chat.completions    1.2s   gpt-4o  · 891tok
+            └─ langchain.tool.search_web  2.1s
+```
+
 ## Installation
 
 ```bash
@@ -242,6 +281,9 @@ pip install peekr                   # base
 pip install "peekr[openai]"         # with OpenAI
 pip install "peekr[anthropic]"      # with Anthropic
 pip install "peekr[bedrock]"        # with AWS Bedrock
+pip install "peekr[langchain]"      # with LangChain
+pip install "peekr[llamaindex]"     # with LlamaIndex
+pip install "peekr[crewai]"         # with CrewAI
 pip install "peekr[all]"            # everything
 ```
 

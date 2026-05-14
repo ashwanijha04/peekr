@@ -10,6 +10,9 @@ from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
+from .patches.langchain_patch import patch_langchain
+from .patches.llamaindex_patch import patch_llamaindex
+from .patches.crewai_patch import patch_crewai
 
 _patched = False
 
@@ -24,8 +27,9 @@ def instrument(
     evaluators: list = None,
 ):
     """
-    Auto-instrument OpenAI, Anthropic, and Bedrock SDKs.
-    Call once before any LLM calls.
+    Auto-instrument LLM SDKs (OpenAI, Anthropic, Bedrock) and agent
+    frameworks (LangChain, LlamaIndex, CrewAI). Call once before any
+    LLM calls.
 
     storage="jsonl"     → write to traces.jsonl (default)
     storage="sqlite"    → write to traces.db (multi-process safe, queryable)
@@ -58,6 +62,9 @@ def instrument(
         patch_openai()
         patch_anthropic()
         patch_bedrock()
+        patch_langchain()
+        patch_llamaindex()
+        patch_crewai()
         _patched = True
 
 

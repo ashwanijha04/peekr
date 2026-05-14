@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>peekr — cProfile for AI agents</title>
-  <meta name="description" content="Agents are black boxes. Peekr makes them transparent. Auto-instruments OpenAI and Anthropic — no code changes, no backend, free forever." />
+  <meta name="description" content="Agents are black boxes. Peekr makes them transparent. Auto-instruments OpenAI, Anthropic, Bedrock, LangChain, LlamaIndex, and CrewAI — no code changes, no backend, free forever." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -198,7 +198,7 @@
   </div>
   <p class="hero-meta">
     <span>Python 3.9+</span>·
-    <span>OpenAI &amp; Anthropic</span>·
+    <span>SDKs + frameworks</span>·
     <span>Sync &amp; async</span>·
     <span>No signup</span>
   </p>
@@ -229,6 +229,27 @@
         <span class="client-detail">Converse API · streaming ✓</span>
       </div>
     </div>
+    <div class="client-card">
+      <div class="client-logo">🔗</div>
+      <div class="client-info">
+        <span class="client-name">LangChain</span>
+        <span class="client-detail">chains · tools · agents · retrievers</span>
+      </div>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">🦙</div>
+      <div class="client-info">
+        <span class="client-name">LlamaIndex</span>
+        <span class="client-detail">query · retrieve · agent steps</span>
+      </div>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">🛠️</div>
+      <div class="client-info">
+        <span class="client-name">CrewAI</span>
+        <span class="client-detail">crew · task · agent spans</span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -238,7 +259,7 @@
     <div class="step">
       <div class="step-num">Step 1</div>
       <h3>Instrument</h3>
-      <p>Call <code>peekr.instrument()</code> once. It patches the OpenAI and Anthropic SDKs automatically — no code changes anywhere else.</p>
+      <p>Call <code>peekr.instrument()</code> once. It patches LLM SDKs (OpenAI, Anthropic, Bedrock) and agent frameworks (LangChain, LlamaIndex, CrewAI) automatically — no code changes anywhere else.</p>
     </div>
     <div class="step">
       <div class="step-num">Step 2</div>
