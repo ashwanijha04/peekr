@@ -1,0 +1,44 @@
+{# Recursive partial: renders one span node + its children.
+
+   Expects `root` in scope (passed by the enclosing {% include %}).
+#}
+{% set s = root %}
+{% set attrs = s.attributes or {} %}
+<li class="span {% if s.status == 'error' %}span-error{% endif %}">
+  <details class="span-row" data-span-id="{{ s.span_id }}">
+    <summary>
+      <span class="span-name mono">{{ s.name }}</span>
+      {% if attrs.get('model') %}<span class="badge badge-model">{{ attrs.model }}</span>{% endif %}
+      <span class="muted small">{{ s.duration_ms | fmt_ms }}</span>
+      {% if attrs.get('tokens_total') %}<span class="muted small">{{ '{:,}'.format(attrs.tokens_total) }} tok</span>{% endif %}
+      {% if s.status == 'error' %}<span class="badge badge-error">error</span>{% endif %}
+      {% if attrs.get('eval_scores') %}
+        {% for name, score in attrs.eval_scores.items() %}
+          <span class="badge badge-eval" title="{{ name }}">{{ name }} · {{ "%.2f" | format(score) }}</span>
+        {% endfor %}
+      {% endif %}
+      {% if attrs.get('guardrail_findings') %}
+        <span class="badge badge-guard">{{ attrs.guardrail_findings|length }} guardrail</span>
+      {% endif %}
+      {% if attrs.get('experiment_variant') %}
+        <span class="badge badge-variant">variant · {{ attrs.experiment_variant }}</span>
+      {% endif %}
+    </summary>
+    <div class="span-body" data-loaded="0">
+      <div class="span-meta muted small mono">
+        span_id {{ s.span_id }}{% if s.parent_id %} · parent {{ s.parent_id }}{% endif %}
+      </div>
+      <div class="span-io" data-needs-io="1">
+        <span class="muted small">loading…</span>
+      </div>
+    </div>
+  </details>
+  {% if s.children %}
+  <ul class="span-tree">
+    {% for child in s.children %}
+      {% set root = child %}
+      {% include "_span.html" %}
+    {% endfor %}
+  </ul>
+  {% endif %}
+</li>

@@ -115,6 +115,27 @@ Now you can see exactly what happened — what went in, what came out, how long 
 
 ---
 
+### `peekr serve` — local web dashboard
+
+Prefer a browser to a terminal? `peekr serve` boots a local-first dashboard that reads the same `traces.db` / `traces.jsonl` — no signup, no remote backend, nothing leaves your machine.
+
+```bash
+pip install "peekr[serve]"
+peekr serve --port 8000      # → http://127.0.0.1:8000
+peekr serve --db traces.db   # explicit storage
+peekr serve --jsonl traces.jsonl
+```
+
+What you get:
+
+- **Trace list** with filters for user, session, time, cost, errors, eval scores and guardrail findings. Paginated 50 per page.
+- **Trace detail** — full span tree, click any span to lazy-load its input / output. Eval scores and guardrail findings render inline so you see what competitors don't show you.
+- **Compare view** — two trace IDs side-by-side. Spot the diff between a good run and a bad one without `diff -u`'ing JSON.
+
+The dashboard binds to `127.0.0.1` by default and refuses non-loopback hosts unless `PEEKR_ALLOW_REMOTE=1` is set. Data stays on your machine.
+
+---
+
 ### `peekr cost` — find what's expensive
 
 `peekr cost` reads a traces file and answers: where did my money and time go?
@@ -242,6 +263,7 @@ pip install peekr                   # base
 pip install "peekr[openai]"         # with OpenAI
 pip install "peekr[anthropic]"      # with Anthropic
 pip install "peekr[bedrock]"        # with AWS Bedrock
+pip install "peekr[serve]"          # local web dashboard (Flask)
 pip install "peekr[all]"            # everything
 ```
 

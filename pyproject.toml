@@ -15,8 +15,9 @@ dependencies = []
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.20"]
 bedrock = ["boto3>=1.28"]
-all = ["openai>=1.0", "anthropic>=0.20", "boto3>=1.28"]
-dev = ["pytest>=8.0"]
+serve = ["flask>=3.0"]
+all = ["openai>=1.0", "anthropic>=0.20", "boto3>=1.28", "flask>=3.0"]
+dev = ["pytest>=8.0", "flask>=3.0"]
 
 [project.urls]
 Homepage = "https://ashwanijha04.github.io/peekr"
@@ -28,6 +29,9 @@ peekr = "peekr.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["peekr*"]
+
+[tool.setuptools.package-data]
+peekr = ["serve/templates/*.html", "serve/static/*.css", "serve/static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

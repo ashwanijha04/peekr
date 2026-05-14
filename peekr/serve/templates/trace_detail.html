@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Trace {{ trace_id[:8] }} — peekr{% endblock %}
+{% block content %}
+<section class="page">
+  <header class="page-header">
+    <a class="muted small" href="{{ url_for('index') }}">← All traces</a>
+    <h1>Trace <span class="mono">{{ trace_id }}</span></h1>
+    {% if overview.user_id or overview.session_id %}
+    <p class="muted small">
+      {% if overview.user_id %}user · {{ overview.user_id }}{% endif %}
+      {% if overview.user_id and overview.session_id %} · {% endif %}
+      {% if overview.session_id %}session · <span class="mono">{{ overview.session_id }}</span>{% endif %}
+    </p>
+    {% endif %}
+  </header>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-label">Duration</div><div class="stat-value">{{ overview.root_duration_ms | fmt_ms }}</div></div>
+    <div class="stat"><div class="stat-label">Spans</div><div class="stat-value">{{ overview.span_count }}</div></div>
+    <div class="stat"><div class="stat-label">Tokens</div><div class="stat-value">{{ '{:,}'.format(overview.tokens_total) }}</div><div class="stat-sub muted small">in {{ '{:,}'.format(overview.tokens_input) }} · out {{ '{:,}'.format(overview.tokens_output) }}</div></div>
+    <div class="stat"><div class="stat-label">Cost (est.)</div><div class="stat-value mono">{{ overview.cost | fmt_cost }}</div></div>
+    <div class="stat"><div class="stat-label">Errors</div><div class="stat-value {% if overview.error_count %}stat-error{% endif %}">{{ overview.error_count }}</div></div>
+  </div>
+
+  {% if overview.eval_scores %}
+  <section class="panel panel-eval">
+    <h2>Eval scores</h2>
+    <div class="score-list">
+      {% for name, score in overview.eval_scores.items() %}
+        <div class="score">
+          <div class="score-name">{{ name }}</div>
+          <div class="score-bar"><div class="score-fill" style="width: {{ (score * 100) | round(1) }}%"></div></div>
+          <div class="score-value mono">{{ "%.2f" | format(score) }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if overview.guardrail_findings %}
+  <section class="panel panel-guard">
+    <h2>Guardrail findings</h2>
+    <ul class="finding-list">
+      {% for f in overview.guardrail_findings %}
+        <li>
+          <span class="badge badge-guard">{{ f.span }}</span>
+          {% if f.finding is mapping %}
+            <span class="mono small">{{ f.finding.get('rule', '') }}</span>
+            {% if f.finding.get('severity') %}<span class="muted small">· {{ f.finding.severity }}</span>{% endif %}
+            {% if f.finding.get('message') %}<div class="muted small">{{ f.finding.message }}</div>{% endif %}
+          {% else %}
+            <span class="mono small">{{ f.finding }}</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Span tree</h2>
+    <ul class="span-tree" data-trace-id="{{ trace_id }}">
+      {% for root in tree %}
+        {% include "_span.html" %}
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="panel panel-compare">
+    <h2>Compare with another trace</h2>
+    <form method="get" action="{{ url_for('compare') }}">
+      <input type="hidden" name="a" value="{{ trace_id }}" />
+      <label>
+        <span class="muted small">Other trace ID</span>
+        <input type="text" name="b" placeholder="paste a trace_id" required />
+      </label>
+      <button type="submit" class="btn btn-primary">Compare →</button>
+    </form>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='detail.js') }}" defer></script>
+{% endblock %}

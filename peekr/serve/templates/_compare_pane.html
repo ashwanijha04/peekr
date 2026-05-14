@@ -1,0 +1,35 @@
+{# Compact stat strip shown above each side of the compare view. #}
+<div class="stat-grid stat-grid-compact">
+  <div class="stat"><div class="stat-label">Duration</div><div class="stat-value">{{ overview.root_duration_ms | fmt_ms }}</div></div>
+  <div class="stat"><div class="stat-label">Spans</div><div class="stat-value">{{ overview.span_count }}</div></div>
+  <div class="stat"><div class="stat-label">Tokens</div><div class="stat-value">{{ '{:,}'.format(overview.tokens_total) }}</div></div>
+  <div class="stat"><div class="stat-label">Cost</div><div class="stat-value mono">{{ overview.cost | fmt_cost }}</div></div>
+  <div class="stat"><div class="stat-label">Errors</div><div class="stat-value {% if overview.error_count %}stat-error{% endif %}">{{ overview.error_count }}</div></div>
+</div>
+
+{% if overview.eval_scores %}
+<div class="score-list compact">
+  {% for name, score in overview.eval_scores.items() %}
+    <div class="score">
+      <div class="score-name small">{{ name }}</div>
+      <div class="score-bar"><div class="score-fill" style="width: {{ (score * 100) | round(1) }}%"></div></div>
+      <div class="score-value mono small">{{ "%.2f" | format(score) }}</div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if overview.guardrail_findings %}
+<ul class="finding-list compact">
+  {% for f in overview.guardrail_findings %}
+    <li>
+      <span class="badge badge-guard">{{ f.span }}</span>
+      {% if f.finding is mapping %}
+        <span class="mono small">{{ f.finding.get('rule', '') }}</span>
+      {% else %}
+        <span class="mono small">{{ f.finding }}</span>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+{% endif %}

@@ -111,6 +111,7 @@
       <a href="#trace-decorator">@trace</a>
       <a href="#manual-spans">Manual spans</a>
       <a href="#cli">CLI viewer</a>
+      <a href="#serve">Web dashboard</a>
       <a href="#exporters">Custom exporters</a>
     </div>
     <div class="sidebar-section">
@@ -150,6 +151,7 @@
         <a href="#trace-decorator">@trace</a>
         <a href="#manual-spans">Manual spans</a>
         <a href="#cli">CLI viewer</a>
+        <a href="#serve">Web dashboard</a>
         <a href="#exporters">Custom exporters</a>
       </div>
       <div class="toc-section"><div class="toc-label">Features</div>
@@ -362,6 +364,21 @@ span.attributes[<span class="st">"custom_key"</span>] = <span class="st">"value"
     <pre><div class="pre-header">terminal</div><code>peekr view traces.jsonl          <span class="cm"># tree view</span>
 peekr view --io traces.jsonl     <span class="cm"># + inputs and outputs</span></code></pre>
     <p>Each trace is shown as a tree grouped by <code>trace_id</code>. The <code>--io</code> flag prints up to 120 characters of the serialized input and output for each span.</p>
+
+    <h2 id="serve">Web dashboard</h2>
+    <p>When the terminal view isn't enough — sharing a trace with a teammate, filtering across thousands of runs, or comparing two traces side-by-side — boot the local-first dashboard:</p>
+    <pre><div class="pre-header">terminal</div><code>pip install <span class="st">"peekr[serve]"</span>
+peekr serve <span class="cm"># → http://127.0.0.1:8000</span>
+peekr serve --port 8001 --db traces.db
+peekr serve --jsonl traces.jsonl</code></pre>
+    <p>The dashboard reads your existing <code>traces.db</code> or <code>traces.jsonl</code> — no new storage, no migration, nothing leaves your machine. It binds to <code>127.0.0.1</code> only; set <code>PEEKR_ALLOW_REMOTE=1</code> to opt out.</p>
+    <h3>Pages</h3>
+    <ul>
+      <li><strong>Trace list</strong> — every trace as a row. Filter by user, session, time, minimum cost, or surface only traces with errors / eval scores / guardrail findings. Paginated 50 per page.</li>
+      <li><strong>Trace detail</strong> — full span tree with click-to-expand I/O (lazy-loaded so a 50&nbsp;KB prompt doesn't bloat the page). Eval scores and guardrail findings render inline.</li>
+      <li><strong>Compare</strong> — two trace IDs side-by-side. Useful when a deploy regressed a flow and you want to see exactly which span diverged.</li>
+    </ul>
+    <div class="callout">No login, no auth, no remote backend, no telemetry. The whole feature is one Flask process reading your local SQLite or JSONL file.</div>
 
     <h2 id="exporters">Custom exporters</h2>
     <p>Any object with an <code>export(span)</code> method works as an exporter:</p>

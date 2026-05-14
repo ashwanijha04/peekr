@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Not found — peekr{% endblock %}
+{% block content %}
+<section class="page">
+  <header class="page-header">
+    <h1>404</h1>
+    <p class="muted">No trace matches that ID. <a href="{{ url_for('index') }}">Back to traces →</a></p>
+  </header>
+</section>
+{% endblock %}

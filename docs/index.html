@@ -492,6 +492,13 @@ ORDER BY start_time;</pre>
         <td class="us yes">✓</td>
       </tr>
       <tr>
+        <td>Local web UI (no signup)</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="us yes">✓</td>
+      </tr>
+      <tr>
         <td>Data stays on your machine</td>
         <td class="yes">✓</td>
         <td class="no">✗</td>
@@ -520,6 +527,7 @@ ORDER BY start_time;</pre>
     <div class="feature-card"><div class="feature-icon">🔬</div><h3>A/B experiments</h3><p><code>@peekr.experiment(variants=[...])</code> routes traffic and tags spans. Analyse results with SQL.</p></div>
     <div class="feature-card"><div class="feature-icon">⏮️</div><h3>Trace replay</h3><p>Re-run any stored trace with the same inputs. Debug production issues locally.</p></div>
     <div class="feature-card"><div class="feature-icon">🔌</div><h3>Custom exporters</h3><p>One method to ship spans to Datadog, Grafana, or your own backend.</p></div>
+    <div class="feature-card"><div class="feature-icon">🖥️</div><h3>Local web dashboard</h3><p><code>peekr serve</code> opens a browser UI: trace list, span tree, side-by-side compare. Local-first — no signup, no remote backend.</p></div>
     <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy first</h3><p>Nothing leaves your machine by default. Use <code>capture_io=False</code> for sensitive functions.</p></div>
   </div>
 </section>

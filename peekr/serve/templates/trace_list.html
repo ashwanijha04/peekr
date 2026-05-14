@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Traces — peekr{% endblock %}
+{% block content %}
+<section class="page">
+  <header class="page-header">
+    <h1>Traces</h1>
+    <p class="muted">{{ total }} trace{{ "" if total == 1 else "s" }} · page {{ page }} of {{ page_count }}</p>
+  </header>
+
+  <form class="filter-bar" method="get" action="{{ url_for('index') }}">
+    <label class="filter">
+      <span>Search</span>
+      <input type="search" name="q" value="{{ filters.q or '' }}" placeholder="span name…" />
+    </label>
+    <label class="filter">
+      <span>User</span>
+      <input type="text" name="user" value="{{ filters.user_id or '' }}" list="user-list" placeholder="any" />
+      <datalist id="user-list">
+        {% for u in facets.users %}<option value="{{ u }}"></option>{% endfor %}
+      </datalist>
+    </label>
+    <label class="filter">
+      <span>Session</span>
+      <input type="text" name="session" value="{{ filters.session_id or '' }}" list="session-list" placeholder="any" />
+      <datalist id="session-list">
+        {% for s in facets.sessions %}<option value="{{ s }}"></option>{% endfor %}
+      </datalist>
+    </label>
+    <label class="filter">
+      <span>Since</span>
+      <input type="text" name="since" value="{{ filters.since or '' }}" placeholder="ISO or epoch" />
+    </label>
+    <label class="filter">
+      <span>Min&nbsp;cost ($)</span>
+      <input type="number" step="0.00001" name="min_cost" value="{{ filters.min_cost or '' }}" />
+    </label>
+    <div class="filter-checks">
+      <label><input type="checkbox" name="has_errors" value="1" {% if filters.has_errors %}checked{% endif %} /> Errors</label>
+      <label><input type="checkbox" name="has_evals" value="1" {% if filters.has_evals %}checked{% endif %} /> Eval scores</label>
+      <label><input type="checkbox" name="has_guardrails" value="1" {% if filters.has_guardrails %}checked{% endif %} /> Guardrails</label>
+    </div>
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-primary">Apply</button>
+      <a class="btn btn-ghost" href="{{ url_for('index') }}">Reset</a>
+    </div>
+  </form>
+
+  {% if traces %}
+  <div class="table-wrap">
+    <table class="trace-table">
+      <thead>
+        <tr>
+          <th>Trace</th>
+          <th>Started</th>
+          <th>Duration</th>
+          <th>Spans</th>
+          <th>Tokens</th>
+          <th>Cost</th>
+          <th>Flags</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in traces %}
+        <tr>
+          <td>
+            <a class="mono" href="{{ url_for('trace_detail', trace_id=t.trace_id) }}">{{ t.trace_id | short_id }}</a>
+            {% if t.user_id %}<div class="muted small">user · {{ t.user_id }}</div>{% endif %}
+            {% if t.session_id %}<div class="muted small">sess · {{ t.session_id | short_id }}</div>{% endif %}
+          </td>
+          <td class="muted small">{{ t.start_time | fmt_ts }}</td>
+          <td>{{ t.root_duration_ms | fmt_ms }}</td>
+          <td>{{ t.span_count }}</td>
+          <td>{{ '{:,}'.format(t.tokens_total) }}</td>
+          <td class="mono">{{ t.cost | fmt_cost }}</td>
+          <td>
+            {% if t.error_count %}<span class="badge badge-error">{{ t.error_count }} err</span>{% endif %}
+            {% if t.has_evals %}<span class="badge badge-eval">eval</span>{% endif %}
+            {% if t.has_guardrails %}<span class="badge badge-guard">guardrail</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_count > 1 %}
+  <nav class="pagination">
+    {% set qs = request_args.to_dict(flat=True) %}
+    {% if page > 1 %}
+      {% set _ = qs.update({'page': page - 1}) %}
+      <a class="btn btn-ghost" href="?{{ qs|urlencode }}">← Previous</a>
+    {% endif %}
+    <span class="muted">{{ page }} / {{ page_count }}</span>
+    {% if page < page_count %}
+      {% set _ = qs.update({'page': page + 1}) %}
+      <a class="btn btn-ghost" href="?{{ qs|urlencode }}">Next →</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <h2>No traces match your filters.</h2>
+    {% if filters.is_empty() %}
+      <p class="muted">Run an instrumented script first:</p>
+      <pre><code>import peekr
+peekr.instrument(storage="sqlite")
+# … your agent code …</code></pre>
+      <p class="muted">Then refresh this page.</p>
+    {% else %}
+      <p class="muted"><a href="{{ url_for('index') }}">Clear filters</a> to see all traces.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

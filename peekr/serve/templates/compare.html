@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Compare traces — peekr{% endblock %}
+{% block content %}
+<section class="page">
+  <header class="page-header">
+    <h1>Compare traces</h1>
+    <p class="muted small">Side-by-side diff of two traces. Pick two IDs to see how runs diverge.</p>
+  </header>
+
+  <form class="compare-form" method="get" action="{{ url_for('compare') }}">
+    <label>
+      <span class="muted small">Trace A</span>
+      <input class="mono" type="text" name="a" value="{{ a_id }}" placeholder="trace_id" />
+    </label>
+    <label>
+      <span class="muted small">Trace B</span>
+      <input class="mono" type="text" name="b" value="{{ b_id }}" placeholder="trace_id" />
+    </label>
+    <button type="submit" class="btn btn-primary">Compare</button>
+  </form>
+
+  {% if not a_id and not b_id %}
+    <div class="empty-state">
+      <p class="muted">Paste two trace IDs above to compare them.</p>
+      <p class="muted small">Tip: open any trace, then use the <em>Compare</em> form at the bottom.</p>
+    </div>
+  {% else %}
+  <div class="compare-grid">
+    <div class="compare-col">
+      <h2 class="mono">A · {{ a_id | short_id }}</h2>
+      {% if trace_a %}
+        {% set overview = overview_a %}
+        {% include "_compare_pane.html" %}
+        <ul class="span-tree" data-trace-id="{{ a_id }}">
+          {% for root in tree_a %}{% include "_span.html" %}{% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No trace found for ID {{ a_id }}.</p>
+      {% endif %}
+    </div>
+    <div class="compare-col">
+      <h2 class="mono">B · {{ b_id | short_id }}</h2>
+      {% if trace_b %}
+        {% set overview = overview_b %}
+        {% include "_compare_pane.html" %}
+        <ul class="span-tree" data-trace-id="{{ b_id }}">
+          {% for root in tree_b %}{% include "_span.html" %}{% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No trace found for ID {{ b_id }}.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='detail.js') }}" defer></script>
+{% endblock %}

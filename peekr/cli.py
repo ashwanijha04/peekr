@@ -8,7 +8,7 @@ from collections import defaultdict
 def main():
     if len(sys.argv) < 2:
         print("Usage: peekr <command> [options]")
-        print("Commands: view, replay, cost")
+        print("Commands: view, replay, cost, serve")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -25,9 +25,41 @@ def main():
         args = [a for a in args if not a.startswith("--")]
         path = args[0] if args else _default_path()
         _cmd_cost(path)
+    elif cmd == "serve":
+        _cmd_serve(sys.argv[2:])
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
+
+
+def _cmd_serve(args: list[str]) -> None:
+    """peekr serve [--port 8000] [--host 127.0.0.1] [--db traces.db] [--jsonl traces.jsonl]
+
+    Boots a local web dashboard for browsing traces. Reads existing storage.
+    """
+    port = 8000
+    host = "127.0.0.1"
+    db_path: str | None = None
+    jsonl_path: str | None = None
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-h", "--help"):
+            print(_cmd_serve.__doc__)
+            return
+        if a == "--port" and i + 1 < len(args):
+            port = int(args[i + 1]); i += 2; continue
+        if a == "--host" and i + 1 < len(args):
+            host = args[i + 1]; i += 2; continue
+        if a == "--db" and i + 1 < len(args):
+            db_path = args[i + 1]; i += 2; continue
+        if a == "--jsonl" and i + 1 < len(args):
+            jsonl_path = args[i + 1]; i += 2; continue
+        i += 1
+
+    from .serve import run  # noqa: PLC0415
+    run(host=host, port=port, db=db_path, jsonl=jsonl_path)
 
 
 def _cmd_replay(args: list[str]) -> None:
