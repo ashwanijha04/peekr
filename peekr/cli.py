@@ -8,7 +8,7 @@ from collections import defaultdict
 def main():
     if len(sys.argv) < 2:
         print("Usage: peekr <command> [options]")
-        print("Commands: view, replay, cost")
+        print("Commands: view, replay, cost, dashboard")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -25,9 +25,31 @@ def main():
         args = [a for a in args if not a.startswith("--")]
         path = args[0] if args else _default_path()
         _cmd_cost(path)
+    elif cmd == "dashboard":
+        _cmd_dashboard(sys.argv[2:])
     else:
         print(f"Unknown command: {cmd}")
         sys.exit(1)
+
+
+def _cmd_dashboard(args: list[str]) -> None:
+    """peekr dashboard [path] [-o report.html] — emit a static HTML report."""
+    output = "dashboard.html"
+    rest: list[str] = []
+    i = 0
+    while i < len(args):
+        if args[i] in ("-o", "--out") and i + 1 < len(args):
+            output = args[i + 1]
+            i += 2
+        else:
+            rest.append(args[i])
+            i += 1
+    path = rest[0] if rest else _default_path()
+
+    from .dashboard import generate_dashboard  # noqa: PLC0415
+    out = generate_dashboard(path, output=output)
+    print(f"Dashboard written to {out}")
+    print(f"Open it with:  open {out}")
 
 
 def _cmd_replay(args: list[str]) -> None:
