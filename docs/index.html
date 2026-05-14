@@ -198,8 +198,9 @@
   </div>
   <p class="hero-meta">
     <span>Python 3.9+</span>·
-    <span>OpenAI &amp; Anthropic</span>·
-    <span>Sync &amp; async</span>·
+    <span>OpenAI · Anthropic · Bedrock · Gemini</span>·
+    <span>Guardrails · Hallucination eval</span>·
+    <span>OpenTelemetry-ready</span>·
     <span>No signup</span>
   </p>
 </section>
@@ -227,6 +228,13 @@
       <div class="client-info">
         <span class="client-name">AWS Bedrock</span>
         <span class="client-detail">Converse API · streaming ✓</span>
+      </div>
+    </div>
+    <div class="client-card">
+      <div class="client-logo">🔵</div>
+      <div class="client-info">
+        <span class="client-name">Google Gemini</span>
+        <span class="client-detail">google-genai · streaming ✓</span>
       </div>
     </div>
   </div>
@@ -513,7 +521,10 @@ ORDER BY start_time;</pre>
     <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via Python's <code>ContextVar</code>. Works across <code>async/await</code> without manual threading.</p></div>
     <div class="feature-card"><div class="feature-icon">🗄️</div><h3>SQLite storage</h3><p>WAL mode for concurrent writes. Query traces across runs directly with SQL.</p></div>
     <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any sync or async function. Captures inputs, outputs, latency, and errors.</p></div>
-    <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id)</code> groups spans across multi-turn conversations by user.</p></div>
+    <div class="feature-card"><div class="feature-icon">🛡️</div><h3>Guardrails</h3><p>PII, secrets, prompt injection, schema, allow/deny lists. <code>warn</code>, <code>redact</code>, or <code>block</code> — composable per check.</p></div>
+    <div class="feature-card"><div class="feature-icon">🔍</div><h3>Hallucination detection</h3><p><code>Faithfulness</code>, <code>AnswerRelevance</code>, <code>ContextRelevance</code> — the full RAG triad, scoring every call.</p></div>
+    <div class="feature-card"><div class="feature-icon">🌐</div><h3>OpenTelemetry export</h3><p>Ship spans to Datadog, Honeycomb, Jaeger, Phoenix — OpenInference schema, your existing OTel pipeline.</p></div>
+    <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id, grounding=...)</code> groups spans and carries RAG context for hallucination checks.</p></div>
     <div class="feature-card"><div class="feature-icon">🚨</div><h3>Alerts</h3><p>Fire when error rate, latency, token spend, or cost spikes cross your threshold.</p></div>
     <div class="feature-card"><div class="feature-icon">🧠</div><h3>LLM-as-judge eval</h3><p>Score every LLM response automatically with <code>Rubric</code>, <code>NotEmpty</code>, and <code>NoError</code> evaluators.</p></div>
     <div class="feature-card"><div class="feature-icon">👍</div><h3>Feedback + export</h3><p>Rate traces good/bad. Export labelled data as OpenAI fine-tuning JSONL in one command.</p></div>

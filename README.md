@@ -197,16 +197,114 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 
 ---
 
-## What's in v0.2
+## What's in v0.3
 
 | Capability | API |
 |---|---|
-| **Session tracing** | `with peekr.session(user_id="u1"):` |
+| **Guardrails** | `instrument(guards=[peekr.guardrails.PII(action="redact"), PromptInjection(action="block")])` |
+| **Hallucination detection** | `instrument(evaluators=[peekr.eval.Faithfulness(), peekr.eval.AnswerRelevance()])` |
+| **OpenTelemetry / OpenInference** | `add_exporter(peekr.OTelExporter())` |
+| **Gemini** | `peekr.instrument()` auto-patches `google-genai` and `google-generativeai` |
+| **Session tracing** | `with peekr.session(user_id="u1", grounding={"context": docs}):` |
 | **Alerts** | `instrument(alerts=[peekr.alert.ErrorRate(0.05)])` |
 | **LLM-as-judge eval** | `instrument(evaluators=[peekr.eval.Rubric("Be concise")])` |
 | **Feedback + fine-tuning export** | `peekr.feedback(trace_id, rating="good")` |
 | **A/B experiments** | `@peekr.experiment(variants=["control", "test"])` |
 | **Trace replay** | `peekr replay <trace_id>` |
+
+---
+
+## Guardrails — block bad input and output
+
+Composable, zero-dependency input/output checks. Plug them into `instrument()` once and every LLM call gets scanned.
+
+```python
+import peekr
+from peekr.guardrails import PII, PromptInjection, Secrets, JSONSchema
+
+peekr.instrument(guards=[
+    PII(action="redact"),                  # strip emails, SSNs, credit cards
+    Secrets(action="block"),               # raise on API keys or private keys
+    PromptInjection(action="warn"),        # flag jailbreak attempts on the span
+])
+```
+
+Available checks: `PII`, `Secrets`, `PromptInjection`, `Toxicity`, `Regex`, `MaxLength`, `JSONSchema`, `AllowList`, `DenyList`, `NoURLs`, `NoCode`. Each accepts an `action`: `"warn"` (default — record on span), `"redact"` (return sanitised text), or `"block"` (raise `GuardrailViolation`).
+
+Use them as a decorator too:
+
+```python
+from peekr.guardrails import guard, PromptInjection, PII
+
+@guard(input=[PromptInjection(action="block")], output=[PII(action="redact")])
+def chat(user_message: str) -> str:
+    return call_llm(user_message)
+```
+
+Or call them directly:
+
+```python
+from peekr.guardrails import PII
+result = PII().check("Email me at foo@example.com")
+result.passed     # False
+result.findings   # [{"type": "email", "match": "foo@example.com", ...}]
+result.redacted   # "Email me at [REDACTED_EMAIL]"
+```
+
+Findings land on the LLM span — visible in `peekr view`, queryable from SQLite.
+
+---
+
+## Hallucination detection — Faithfulness, Answer Relevance, Context Relevance
+
+The RAG triad: is the answer grounded in the context, does it actually address the question, was the right context retrieved?
+
+```python
+import peekr
+peekr.instrument(evaluators=[
+    peekr.eval.Faithfulness(),       # are the answer's claims supported by context?
+    peekr.eval.AnswerRelevance(),    # does the answer address the question?
+    peekr.eval.ContextRelevance(),   # was the retrieved context relevant?
+])
+
+# Tell peekr what was retrieved and what was asked
+with peekr.session(grounding={"context": retrieved_docs, "query": user_question}):
+    response = client.chat.completions.create(...)
+```
+
+Or attach grounding mid-trace:
+
+```python
+peekr.set_grounding(context=retrieved_docs, query=user_question)
+response = client.chat.completions.create(...)
+```
+
+Scores are stored in `span.attributes["eval_scores"]` and exported to JSONL / SQLite / OTel like everything else. A `Faithfulness=0.6` says 40% of the answer's claims weren't supported — that's a hallucinated bullet you can investigate.
+
+Use them programmatically for offline evals:
+
+```python
+from peekr.eval import Faithfulness
+score = Faithfulness().score(answer, context=retrieved_docs)
+```
+
+---
+
+## Ship to any observability backend (OpenTelemetry / OpenInference)
+
+Already running Datadog / Honeycomb / Jaeger / Phoenix / Grafana Tempo? Add the OTel exporter and peekr spans flow through your existing pipeline with OpenInference semantic conventions intact.
+
+```python
+import peekr
+from peekr.otel import OTelExporter
+
+peekr.instrument()
+peekr.add_exporter(OTelExporter())              # uses your app's OTel config
+# or:
+peekr.add_exporter(OTelExporter(endpoint="https://api.honeycomb.io", headers={...}))
+```
+
+Maps to `openinference.span.kind`, `llm.model_name`, `llm.token_count.{prompt,completion,total}`, `session.id`, `user.id`, `input.value`, `output.value` — the same schema Arize, Langfuse, and Phoenix consume.
 
 ## Supported clients
 
@@ -215,8 +313,9 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 | **OpenAI** | `openai` | `pip install "peekr[openai]"` |
 | **Anthropic** | `anthropic` | `pip install "peekr[anthropic]"` |
 | **AWS Bedrock** | `boto3` | `pip install "peekr[bedrock]"` |
+| **Google Gemini** | `google-genai` | `pip install "peekr[gemini]"` |
 
-All three auto-instrument with the same two lines — `peekr.instrument()` detects whichever SDKs are installed and patches them. Streaming is supported for all three.
+All four auto-instrument with the same two lines — `peekr.instrument()` detects whichever SDKs are installed and patches them. Streaming is supported for all four.
 
 ```python
 import peekr
@@ -233,6 +332,10 @@ anthropic.Anthropic().messages.create(model="claude-opus-4-5", messages=[...])
 # Bedrock
 import boto3
 boto3.client("bedrock-runtime").converse(modelId="anthropic.claude-3-haiku-20240307-v1:0", messages=[...])
+
+# Gemini
+from google import genai
+genai.Client().models.generate_content(model="gemini-2.0-flash", contents="hello")
 ```
 
 ## Installation
@@ -242,6 +345,8 @@ pip install peekr                   # base
 pip install "peekr[openai]"         # with OpenAI
 pip install "peekr[anthropic]"      # with Anthropic
 pip install "peekr[bedrock]"        # with AWS Bedrock
+pip install "peekr[gemini]"         # with Google Gemini
+pip install "peekr[otel]"           # with OpenTelemetry export
 pip install "peekr[all]"            # everything
 ```
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "peekr"
-version = "0.2.0"
+version = "0.3.0"
 description = "Zero-config observability for AI agents"
 readme = "README.md"
 license = { text = "MIT" }
@@ -15,7 +15,21 @@ dependencies = []
 openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.20"]
 bedrock = ["boto3>=1.28"]
-all = ["openai>=1.0", "anthropic>=0.20", "boto3>=1.28"]
+gemini = ["google-genai>=0.3"]
+otel = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
+all = [
+    "openai>=1.0",
+    "anthropic>=0.20",
+    "boto3>=1.28",
+    "google-genai>=0.3",
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
 dev = ["pytest>=8.0"]
 
 [project.urls]

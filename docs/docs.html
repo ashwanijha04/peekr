@@ -115,6 +115,9 @@
     </div>
     <div class="sidebar-section">
       <div class="sidebar-label">Features</div>
+      <a href="#guardrails">Guardrails</a>
+      <a href="#hallucination">Hallucination detection</a>
+      <a href="#otel">OpenTelemetry export</a>
       <a href="#sessions">Sessions</a>
       <a href="#alerts">Alerts</a>
       <a href="#eval">Eval (LLM-as-judge)</a>
@@ -153,6 +156,9 @@
         <a href="#exporters">Custom exporters</a>
       </div>
       <div class="toc-section"><div class="toc-label">Features</div>
+        <a href="#guardrails">Guardrails</a>
+        <a href="#hallucination">Hallucination detection</a>
+        <a href="#otel">OpenTelemetry export</a>
         <a href="#sessions">Sessions</a>
         <a href="#alerts">Alerts</a>
         <a href="#eval">Eval (LLM-as-judge)</a>
@@ -168,7 +174,10 @@
     <pre><div class="pre-header">terminal</div><code>pip install peekr                   <span class="cm"># base — no LLM SDK required</span>
 pip install "peekr[openai]"         <span class="cm"># with OpenAI</span>
 pip install "peekr[anthropic]"      <span class="cm"># with Anthropic</span>
-pip install "peekr[all]"            <span class="cm"># both</span></code></pre>
+pip install "peekr[bedrock]"        <span class="cm"># with AWS Bedrock</span>
+pip install "peekr[gemini]"         <span class="cm"># with Google Gemini</span>
+pip install "peekr[otel]"           <span class="cm"># with OpenTelemetry export</span>
+pip install "peekr[all]"            <span class="cm"># everything</span></code></pre>
     <p>Requires Python 3.9+. No accounts, no backend, no environment variables.</p>
 
     <!-- QUICKSTART -->
@@ -402,6 +411,131 @@ peekr.<span class="fn">instrument</span>()
       <tr><td><code>attributes.user_id</code></td><td>string</td><td>Set when span is inside a peekr.session(user_id=...)</td></tr>
       <tr><td><code>attributes.eval_scores</code></td><td>dict</td><td>Evaluator name → score (0.0–1.0) when evaluators are configured</td></tr>
       <tr><td><code>attributes.experiment_variant</code></td><td>string</td><td>Variant name when inside a @peekr.experiment</td></tr>
+      <tr><td><code>attributes.guardrails</code></td><td>dict</td><td><code>{direction: {GuardName: {passed, action, findings, redacted}}}</code> when guards are configured</td></tr>
+      <tr><td><code>attributes.guardrail_violations</code></td><td>list</td><td>Names of guardrails that failed, e.g. <code>["input.PromptInjection"]</code></td></tr>
+      <tr><td><code>attributes.grounding.context</code></td><td>string|list</td><td>Retrieved context for RAG — used by Faithfulness / ContextRelevance</td></tr>
+      <tr><td><code>attributes.grounding.query</code></td><td>string</td><td>Original user question — used by AnswerRelevance / ContextRelevance</td></tr>
+    </table></div>
+
+    <!-- GUARDRAILS -->
+    <h2 id="guardrails">Guardrails</h2>
+    <p>Guardrails are composable input/output checks that run on every LLM call. Pass them to <code>instrument()</code> and findings land on each span; choose between <code>warn</code> (record only), <code>redact</code> (return sanitised text), or <code>block</code> (raise <code>GuardrailViolation</code>).</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+<span class="kw">from</span> peekr.guardrails <span class="kw">import</span> PII, Secrets, PromptInjection, JSONSchema
+
+peekr.<span class="fn">instrument</span>(guards=[
+    <span class="fn">PII</span>(action=<span class="st">"redact"</span>),                  <span class="cm"># strip emails, SSNs, credit cards</span>
+    <span class="fn">Secrets</span>(action=<span class="st">"block"</span>),               <span class="cm"># raise on API keys, private keys</span>
+    <span class="fn">PromptInjection</span>(action=<span class="st">"warn"</span>),        <span class="cm"># flag jailbreak attempts on the span</span>
+])</code></pre>
+
+    <p>Use them as a decorator on your own functions:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.guardrails <span class="kw">import</span> guard, PromptInjection, PII
+
+<span class="fn">@guard</span>(input=[<span class="fn">PromptInjection</span>(action=<span class="st">"block"</span>)], output=[<span class="fn">PII</span>(action=<span class="st">"redact"</span>)])
+<span class="kw">def</span> <span class="fn">chat</span>(user_message: <span class="cm">str</span>) -&gt; <span class="cm">str</span>:
+    <span class="kw">return</span> <span class="fn">call_llm</span>(user_message)</code></pre>
+
+    <p>Or programmatically:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.guardrails <span class="kw">import</span> PII
+
+result = <span class="fn">PII</span>().<span class="fn">check</span>(<span class="st">"Email me at foo@example.com"</span>)
+result.passed     <span class="cm"># False</span>
+result.findings   <span class="cm"># [{"type": "email", "match": "foo@example.com", ...}]</span>
+result.redacted   <span class="cm"># "Email me at [REDACTED_EMAIL]"</span></code></pre>
+
+    <p>Built-in checks:</p>
+    <div class="table-wrapper"><table>
+      <tr><th>Check</th><th>What it catches</th></tr>
+      <tr><td><code>PII</code></td><td>email, phone, SSN, Luhn-valid credit cards, IPv4. Configurable via <code>types=[…]</code>.</td></tr>
+      <tr><td><code>Secrets</code></td><td>OpenAI, Anthropic, AWS, GitHub, Google API, Slack, Stripe keys, JWTs, PEM private keys.</td></tr>
+      <tr><td><code>PromptInjection</code></td><td>"ignore previous instructions", role overrides, system-prompt leak, jailbreak mode, fake tags, zero-width Unicode.</td></tr>
+      <tr><td><code>Toxicity</code></td><td>Configurable profanity wordlist. Extend via <code>extra_words=[…]</code>.</td></tr>
+      <tr><td><code>Regex</code></td><td>Any custom regex pattern.</td></tr>
+      <tr><td><code>MaxLength</code></td><td>Reject text above N characters; redact-mode truncates.</td></tr>
+      <tr><td><code>JSONSchema</code></td><td>Validate JSON output against a minimal schema (type / required / properties / items).</td></tr>
+      <tr><td><code>AllowList</code> / <code>DenyList</code></td><td>Topical filters — at least one allow term must appear; no deny term may appear.</td></tr>
+      <tr><td><code>NoURLs</code> / <code>NoCode</code></td><td>Block URLs or code-shaped content.</td></tr>
+    </table></div>
+
+    <p>Write your own by subclassing <code>Guardrail</code>:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.guardrails <span class="kw">import</span> Guardrail, GuardrailResult
+
+<span class="kw">class</span> <span class="fn">NoQuestionMarks</span>(Guardrail):
+    <span class="kw">def</span> <span class="fn">_check</span>(self, text: <span class="cm">str</span>) -&gt; GuardrailResult:
+        <span class="kw">if</span> <span class="st">"?"</span> <span class="kw">not in</span> text:
+            <span class="kw">return</span> <span class="fn">GuardrailResult</span>(name=<span class="st">"NoQuestionMarks"</span>, passed=<span class="kw">True</span>)
+        <span class="kw">return</span> <span class="fn">GuardrailResult</span>(
+            name=<span class="st">"NoQuestionMarks"</span>,
+            passed=<span class="kw">False</span>,
+            findings=[{<span class="st">"type"</span>: <span class="st">"question"</span>}],
+        )</code></pre>
+
+    <!-- HALLUCINATION -->
+    <h2 id="hallucination">Hallucination detection</h2>
+    <p>The RAG triad — three evaluators that together diagnose retrieval and generation problems.</p>
+    <div class="table-wrapper"><table>
+      <tr><th>Evaluator</th><th>Question it answers</th><th>Needs</th></tr>
+      <tr><td><code>Faithfulness</code></td><td>Are the answer's claims supported by the retrieved context?</td><td>output + context</td></tr>
+      <tr><td><code>AnswerRelevance</code></td><td>Does the answer actually address the question?</td><td>output + query</td></tr>
+      <tr><td><code>ContextRelevance</code></td><td>Was the retrieved context relevant to the question?</td><td>context + query</td></tr>
+    </table></div>
+
+    <p>Attach grounding info to the trace, then register the evaluators:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>(evaluators=[
+    peekr.eval.<span class="fn">Faithfulness</span>(),
+    peekr.eval.<span class="fn">AnswerRelevance</span>(),
+    peekr.eval.<span class="fn">ContextRelevance</span>(),
+])
+
+<span class="cm"># Option A — set grounding for the whole session</span>
+<span class="kw">with</span> peekr.<span class="fn">session</span>(grounding={<span class="st">"context"</span>: retrieved_docs, <span class="st">"query"</span>: question}):
+    response = client.chat.completions.<span class="fn">create</span>(...)
+
+<span class="cm"># Option B — set grounding mid-trace</span>
+peekr.<span class="fn">set_grounding</span>(context=retrieved_docs, query=question)
+response = client.chat.completions.<span class="fn">create</span>(...)</code></pre>
+
+    <p>Scores land on the span's <code>eval_scores</code> attribute and flow through every exporter. Inspect them with the same CLI:</p>
+    <pre><div class="pre-header">sql</div><code><span class="cm">-- traces with hallucinated claims</span>
+SELECT trace_id, json_extract(attributes, <span class="st">'$.eval_scores.Faithfulness'</span>) score
+FROM spans WHERE name LIKE <span class="st">'openai.%'</span>
+  <span class="kw">AND</span> CAST(score <span class="kw">AS</span> REAL) &lt; 0.7
+ORDER BY score;</code></pre>
+
+    <p>Also usable for offline evals — call <code>.score()</code> directly:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.eval <span class="kw">import</span> Faithfulness
+
+score = <span class="fn">Faithfulness</span>().<span class="fn">score</span>(answer, context=retrieved_docs)</code></pre>
+
+    <!-- OTEL -->
+    <h2 id="otel">OpenTelemetry / OpenInference export</h2>
+    <p>Peekr can publish spans to any OpenTelemetry-compatible backend (Datadog, Honeycomb, Jaeger, Grafana Tempo, Arize Phoenix, Langfuse-OTel, …) using the OpenInference semantic conventions consumed across the LLM observability ecosystem.</p>
+    <pre><div class="pre-header">terminal</div><code>pip install <span class="st">"peekr[otel]"</span></code></pre>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+<span class="kw">from</span> peekr.otel <span class="kw">import</span> OTelExporter
+
+peekr.<span class="fn">instrument</span>()
+peekr.<span class="fn">add_exporter</span>(<span class="fn">OTelExporter</span>())                              <span class="cm"># uses your app's global OTel SDK</span>
+
+<span class="cm"># or — configure an explicit OTLP target on the spot:</span>
+peekr.<span class="fn">add_exporter</span>(<span class="fn">OTelExporter</span>(
+    endpoint=<span class="st">"https://api.honeycomb.io"</span>,
+    headers={<span class="st">"x-honeycomb-team"</span>: <span class="st">"…"</span>},
+))</code></pre>
+
+    <p>Attribute mapping (peekr → OpenInference):</p>
+    <div class="table-wrapper"><table>
+      <tr><th>Peekr</th><th>OpenInference</th></tr>
+      <tr><td>LLM span (openai.*, anthropic.*, …)</td><td><code>openinference.span.kind</code> = <code>"LLM"</code></td></tr>
+      <tr><td><code>model</code></td><td><code>llm.model_name</code></td></tr>
+      <tr><td><code>tokens_input</code> / <code>tokens_output</code> / <code>tokens_total</code></td><td><code>llm.token_count.prompt</code> / <code>.completion</code> / <code>.total</code></td></tr>
+      <tr><td><code>input</code> / <code>output</code></td><td><code>input.value</code> / <code>output.value</code> (+ mime types)</td></tr>
+      <tr><td><code>session_id</code> / <code>user_id</code></td><td><code>session.id</code> / <code>user.id</code></td></tr>
+      <tr><td><code>eval_scores</code></td><td><code>peekr.eval.&lt;Name&gt;</code></td></tr>
+      <tr><td><code>guardrails</code></td><td><code>peekr.guardrails</code> (JSON), <code>peekr.guardrail_violations</code></td></tr>
+      <tr><td><code>error</code></td><td><code>exception.message</code> + ERROR status</td></tr>
     </table></div>
 
     <!-- SESSIONS -->
@@ -414,6 +548,10 @@ peekr.<span class="fn">instrument</span>()
 
 <span class="cm"># session_id auto-generated if not provided</span>
 <span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"user_123"</span>):
+    <span class="fn">run_agent</span>()
+
+<span class="cm"># attach RAG grounding — used by Faithfulness / AnswerRelevance / ContextRelevance</span>
+<span class="kw">with</span> peekr.<span class="fn">session</span>(grounding={<span class="st">"context"</span>: docs, <span class="st">"query"</span>: user_q}):
     <span class="fn">run_agent</span>()</code></pre>
     <p>Query by user in SQLite:</p>
     <pre><div class="pre-header">sql</div><code>SELECT trace_id, AVG(duration_ms), SUM(json_extract(attributes,'$.tokens_total'))
