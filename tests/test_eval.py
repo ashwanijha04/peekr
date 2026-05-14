@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from peekr.span import Span
 from peekr.eval import BaseEvaluator, EvalExporter, _in_eval
 from peekr.eval.rubric import NotEmpty, NoError, Rubric
+from peekr.eval.hallucination import Hallucination, _parse_score, _parse_claims
 
 
 # ---------------------------------------------------------------------------
@@ -275,3 +277,237 @@ class TestRubricMocked:
             span = make_llm_span()
             with pytest.raises(ImportError):
                 rubric.evaluate(span)
+
+
+# ---------------------------------------------------------------------------
+# Hallucination (mocked — no real API calls)
+# ---------------------------------------------------------------------------
+
+class TestParseScore:
+    def test_parses_plain_float(self):
+        assert _parse_score("0.42") == pytest.approx(0.42)
+
+    def test_parses_float_with_surrounding_text(self):
+        assert _parse_score("Score: 0.73 (mostly grounded)") == pytest.approx(0.73)
+
+    def test_clamps_above_one(self):
+        assert _parse_score("1.5") == pytest.approx(1.0)
+
+    def test_clamps_below_zero(self):
+        assert _parse_score("-0.2") == pytest.approx(0.0)
+
+    def test_raises_on_no_number(self):
+        with pytest.raises(ValueError):
+            _parse_score("not a score")
+
+
+class TestHallucination:
+    def test_returns_one_when_output_is_empty(self):
+        # Nothing to hallucinate — don't penalize.
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            evaluator = Hallucination()
+            span = make_llm_span(output="")
+            assert evaluator.evaluate(span) == pytest.approx(1.0)
+            mock_openai.chat.completions.create.assert_not_called()
+
+    def test_returns_one_when_no_context_available(self):
+        # No grounding source → not evaluable; don't poison the metric.
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            evaluator = Hallucination()
+            span = Span(name="openai.chat.completions", trace_id="t1")
+            span.attributes["output"] = "Paris is the capital of France."
+            span.finish()
+            assert evaluator.evaluate(span) == pytest.approx(1.0)
+            mock_openai.chat.completions.create.assert_not_called()
+
+    def test_calls_openai_and_returns_score(self):
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "0.9"
+
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = mock_response
+            evaluator = Hallucination()
+            span = make_llm_span(
+                input_text="The Eiffel Tower is in Paris.",
+                output="The Eiffel Tower is in Paris.",
+            )
+            assert evaluator.evaluate(span) == pytest.approx(0.9)
+            mock_openai.chat.completions.create.assert_called_once()
+
+    def test_prompt_contains_context_and_output(self):
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "0.5"
+        context = "France's capital is Paris."
+        output = "France's capital is Lyon."
+
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = mock_response
+            evaluator = Hallucination()
+            span = make_llm_span(input_text=context, output=output)
+            evaluator.evaluate(span)
+
+        call_kwargs = mock_openai.chat.completions.create.call_args
+        messages = call_kwargs.kwargs["messages"]
+        prompt_text = messages[0]["content"]
+        assert context in prompt_text
+        assert output in prompt_text
+
+    def test_context_extractor_overrides_input(self):
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "1.0"
+
+        retrieved_doc = "Berlin is the capital of Germany."
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = mock_response
+            evaluator = Hallucination(
+                context_extractor=lambda s: retrieved_doc,
+            )
+            span = make_llm_span(input_text="ignored", output="Berlin is in Germany.")
+            evaluator.evaluate(span)
+
+        prompt_text = mock_openai.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        assert retrieved_doc in prompt_text
+        assert "ignored" not in prompt_text
+
+    def test_uses_custom_model_when_provided(self):
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "0.8"
+
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = mock_response
+            evaluator = Hallucination(model="gpt-4o")
+            span = make_llm_span(input_text="ctx", output="out")
+            evaluator.evaluate(span)
+
+        assert mock_openai.chat.completions.create.call_args.kwargs["model"] == "gpt-4o"
+
+    def test_falls_back_to_anthropic_when_no_openai(self):
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="0.65")]
+
+        with patch("peekr.eval.hallucination.openai", None):
+            with patch("peekr.eval.hallucination.anthropic") as mock_anthropic:
+                mock_client = MagicMock()
+                mock_anthropic.Anthropic.return_value = mock_client
+                mock_client.messages.create.return_value = mock_response
+                evaluator = Hallucination()
+                span = make_llm_span(input_text="ctx", output="out")
+                score = evaluator.evaluate(span)
+
+        assert score == pytest.approx(0.65)
+
+    def test_raises_import_error_when_no_llm_available(self):
+        with patch("peekr.eval.hallucination.openai", None), \
+             patch("peekr.eval.hallucination.anthropic", None):
+            evaluator = Hallucination()
+            span = make_llm_span(input_text="ctx", output="out")
+            with pytest.raises(ImportError):
+                evaluator.evaluate(span)
+
+    def test_name(self):
+        assert Hallucination().name == "Hallucination"
+
+    def test_integration_via_eval_exporter(self):
+        # Hallucination should plug into EvalExporter and write to eval_scores.
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "0.3"
+
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = mock_response
+            exporter = EvalExporter(evaluators=[Hallucination()])
+            span = make_llm_span(input_text="The sky is blue.", output="The sky is green.")
+            exporter.export(span)
+
+        assert span.attributes["eval_scores"]["Hallucination"] == pytest.approx(0.3)
+
+
+# ---------------------------------------------------------------------------
+# Hallucination — detailed (RAGAS-style claim decomposition)
+# ---------------------------------------------------------------------------
+
+class TestParseClaims:
+    def test_parses_valid_json(self):
+        text = '{"claims": [{"text": "A is true", "verdict": "supported"}]}'
+        out = _parse_claims(text)
+        assert out == [{"text": "A is true", "verdict": "supported"}]
+
+    def test_extracts_json_from_surrounding_prose(self):
+        text = 'Here is the analysis: {"claims": [{"text": "X", "verdict": "contradicted"}]}'
+        out = _parse_claims(text)
+        assert out == [{"text": "X", "verdict": "contradicted"}]
+
+    def test_unknown_verdict_falls_back_to_unsupported(self):
+        text = '{"claims": [{"text": "X", "verdict": "maybe"}]}'
+        assert _parse_claims(text) == [{"text": "X", "verdict": "unsupported"}]
+
+    def test_skips_claims_with_empty_text(self):
+        text = '{"claims": [{"text": "", "verdict": "supported"}, {"text": "Y", "verdict": "supported"}]}'
+        assert _parse_claims(text) == [{"text": "Y", "verdict": "supported"}]
+
+    def test_empty_claims_list(self):
+        assert _parse_claims('{"claims": []}') == []
+
+    def test_raises_on_no_json(self):
+        with pytest.raises(ValueError):
+            _parse_claims("no json here")
+
+
+class TestHallucinationDetailed:
+    def _judge_response(self, claims: list[dict]) -> MagicMock:
+        mock = MagicMock()
+        mock.choices[0].message.content = json.dumps({"claims": claims})
+        return mock
+
+    def test_score_is_supported_over_total(self):
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = self._judge_response([
+                {"text": "Claim 1", "verdict": "supported"},
+                {"text": "Claim 2", "verdict": "supported"},
+                {"text": "Claim 3", "verdict": "contradicted"},
+                {"text": "Claim 4", "verdict": "unsupported"},
+            ])
+            evaluator = Hallucination(detailed=True)
+            span = make_llm_span(input_text="ctx", output="out")
+            score = evaluator.evaluate(span)
+        assert score == pytest.approx(0.5)
+
+    def test_writes_details_to_span(self):
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = self._judge_response([
+                {"text": "A", "verdict": "supported"},
+                {"text": "B", "verdict": "contradicted"},
+            ])
+            evaluator = Hallucination(detailed=True)
+            span = make_llm_span(input_text="ctx", output="out")
+            evaluator.evaluate(span)
+
+        details = span.attributes["hallucination_details"]
+        assert details["total"] == 2
+        assert details["supported"] == 1
+        assert details["contradicted"] == 1
+        assert details["unsupported"] == 0
+        assert details["score"] == pytest.approx(0.5)
+        assert len(details["claims"]) == 2
+
+    def test_no_claims_extracted_returns_one(self):
+        # Output is non-empty but the judge finds no factual claims → score 1.0.
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = self._judge_response([])
+            evaluator = Hallucination(detailed=True)
+            span = make_llm_span(input_text="ctx", output="How are you?")
+            score = evaluator.evaluate(span)
+        assert score == pytest.approx(1.0)
+        assert span.attributes["hallucination_details"]["total"] == 0
+
+    def test_integration_via_eval_exporter_writes_both(self):
+        with patch("peekr.eval.hallucination.openai") as mock_openai:
+            mock_openai.chat.completions.create.return_value = self._judge_response([
+                {"text": "A", "verdict": "supported"},
+                {"text": "B", "verdict": "unsupported"},
+            ])
+            exporter = EvalExporter(evaluators=[Hallucination(detailed=True)])
+            span = make_llm_span(input_text="ctx", output="out")
+            exporter.export(span)
+
+        assert span.attributes["eval_scores"]["Hallucination"] == pytest.approx(0.5)
+        assert span.attributes["hallucination_details"]["total"] == 2

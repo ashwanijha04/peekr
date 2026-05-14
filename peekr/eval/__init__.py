@@ -62,6 +62,8 @@ class EvalExporter:
 
 # Import concrete evaluators so they're importable from peekr.eval
 from .rubric import Rubric, NotEmpty, NoError  # noqa: E402, F401
+from .hallucination import Hallucination  # noqa: E402, F401
+from .citation import CitationAccuracy  # noqa: E402, F401
 
 __all__ = [
     "BaseEvaluator",
@@ -70,4 +72,6 @@ __all__ = [
     "Rubric",
     "NotEmpty",
     "NoError",
+    "Hallucination",
+    "CitationAccuracy",
 ]
