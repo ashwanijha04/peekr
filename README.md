@@ -204,9 +204,174 @@ Trace 3:  24,891 tokens   ← growing = unbounded history. Summarize after 5 tur
 | **Session tracing** | `with peekr.session(user_id="u1"):` |
 | **Alerts** | `instrument(alerts=[peekr.alert.ErrorRate(0.05)])` |
 | **LLM-as-judge eval** | `instrument(evaluators=[peekr.eval.Rubric("Be concise")])` |
+| **Hallucination detection** | `instrument(evaluators=[peekr.eval.Hallucination()])` |
+| **Claim-level (RAGAS) hallucination** | `Hallucination(detailed=True)` — per-claim verdicts |
+| **Drift dashboard** | `peekr dashboard traces.db -o report.html` |
 | **Feedback + fine-tuning export** | `peekr.feedback(trace_id, rating="good")` |
 | **A/B experiments** | `@peekr.experiment(variants=["control", "test"])` |
 | **Trace replay** | `peekr replay <trace_id>` |
+
+### Hallucination detection & eval scores
+
+Score every LLM output for groundedness, conciseness, or any custom rubric. Scores land on the span as `attributes.eval_scores` — visible in `peekr view` and queryable from SQLite.
+
+```python
+import peekr
+
+peekr.instrument(evaluators=[
+    peekr.eval.Hallucination(),                       # 0.0 = fully hallucinated, 1.0 = fully grounded
+    peekr.eval.Rubric("Answer is concise and direct"),
+    peekr.eval.NotEmpty(),
+    peekr.eval.NoError(),
+])
+```
+
+```
+openai.chat [gpt-4o]  843ms  312tok
+   in:  "When was the Eiffel Tower built?"
+   out: "The Eiffel Tower was built in 1923 by Frank Lloyd Wright."
+   eval_scores: {Hallucination: 0.0, Rubric: 0.9, NotEmpty: 1.0}   ← invented facts caught
+```
+
+RAG flow? Point `Hallucination` at the retrieved document instead of the prompt:
+
+```python
+peekr.eval.Hallucination(
+    context_extractor=lambda span: span.attributes.get("retrieved_docs", "")
+)
+```
+
+Query the lowest-scoring traces to find regressions:
+
+```sql
+SELECT trace_id,
+       json_extract(attributes,'$.eval_scores.Hallucination') AS hallucination,
+       json_extract(attributes,'$.output') AS output
+FROM spans
+WHERE hallucination IS NOT NULL AND hallucination < 0.5
+ORDER BY start_time DESC;
+```
+
+### Claim-level detection (RAGAS-style)
+
+For *why* a response was scored low — not just *what* the score was — enable `detailed=True`. The judge decomposes the output into atomic claims and assigns each one a verdict (`supported` / `contradicted` / `unsupported`), the same pipeline RAGAS Faithfulness uses. The score is `supported_count / total_claims`, and the full breakdown is stored on the span.
+
+```python
+peekr.instrument(evaluators=[peekr.eval.Hallucination(detailed=True)])
+```
+
+```jsonc
+// span.attributes.hallucination_details
+{
+  "total": 3, "supported": 1, "contradicted": 2, "unsupported": 0, "score": 0.33,
+  "claims": [
+    {"text": "The Eiffel Tower is in Paris",        "verdict": "supported"},
+    {"text": "It was built in 1923",                "verdict": "contradicted"},
+    {"text": "It was designed by Frank Lloyd Wright","verdict": "contradicted"}
+  ]
+}
+```
+
+Same prompt cost as before (~one judge call), more output tokens. Use the simple mode for cheap monitoring across many traces and detailed mode for the cases you want to investigate.
+
+### Dashboard — `peekr dashboard`
+
+Generate a self-contained HTML observability report from your traces. Designed as a drop-in for any RAG or memory/agent pipeline: open the file in any browser, no server, no build step.
+
+```bash
+peekr dashboard traces.db -o report.html   # SQLite
+peekr dashboard traces.jsonl               # JSONL — writes ./dashboard.html
+open report.html
+```
+
+**What you get on one page:**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ Filter chips:  [Tenant] [Model] [Endpoint] [All / 1h / 24h / 7d]    │
+├──────────────────────────────────────────────────────────────────────┤
+│ ● Hallucination health: 66/100   needs attention                     │
+│   30 of 134 scored calls flagged. ↓ 12 pts vs baseline 0.78.         │
+│   [───sparkline───]                                                  │
+├──────────────────────────────────────────────────────────────────────┤
+│ What's happening:                                                    │
+│ › Hallucination dropped 27 points from baseline (0.89 → 0.62).       │
+│ › Worst channel: gpt-4o-mini · acme · /api/qa — mean 0.31 / 8 calls. │
+│ › 4 of 12 citations were invented (33%).                             │
+├──────────────────────────────────────────────────────────────────────┤
+│ Hallucination 0.66 ▼-12  Rubric 0.84  Citations 0.60 ▼-15  Errors 6 │
+│ → 30 flagged       → stable      → 4 invented refs      → 4.3% calls│
+├──────────────────────────────────────────────────────────────────────┤
+│ Likely causes & next steps:                                          │
+│ [HIGH]   Model is inventing citations (33% of detected references)   │
+│         What to try:                                                 │
+│         1. Inspect retrieval: log returned chunks for a flagged span │
+│         2. Tighten prompt: "Cite only sources in the context above"  │
+│         3. Verify citations post-hoc against retrieved chunks        │
+│         4. Try hybrid retrieval (BM25 + dense) for keyword queries   │
+│                                                                      │
+│ [MED]   Failures concentrated on endpoint = /api/qa                  │
+│         What to try:                                                 │
+│         1. Diff last week of deploys touching this endpoint          │
+│         2. Compare this endpoint's prompt vs a healthier one         │
+├──────────────────────────────────────────────────────────────────────┤
+│ Score over time   (rolling 20-call mean, thresholds at 0.7 / 0.5)    │
+│   1.0 ──────────────────────╮                                        │
+│              ───╮          │   ╮                                     │
+│   0.7 ─ ─ ─ ─ ╲ ╲ ─ ─ ─ ─ ╲ ─ ╲─ ─ warning                          │
+│   0.5 ─ ─ ─ ─ ─╲╲─ ─ ─ ─ ─╲─╮ critical                              │
+│   0.0 ──────────────────────╰╰──                                     │
+├──────────────────────────────────────────────────────────────────────┤
+│ Failure breakdown by channel & time     (red=halluc, green=grounded) │
+│                                                                      │
+│   model                10:00  11:00  12:00  13:00  14:00  15:00      │
+│   gpt-4o-mini          0.89   0.71   0.42   0.31   0.28   0.22       │
+│   gpt-4o               0.91   0.88   0.76   0.81   0.79   0.80       │
+│   claude-opus-4-5      0.93   0.92   0.94   0.91   0.92   0.94       │
+│                                                                      │
+│   (click a red cell to filter the dashboard to that channel)         │
+├──────────────────────────────────────────────────────────────────────┤
+│ #1 ⬤0.00  gpt-4o-mini · acme · /api/qa                              │
+│ Q: When was the Eiffel Tower built and by whom?                      │
+│                                                                      │
+│ ┌─SOURCE CONTEXT────────────┐ ┌─MODEL ANSWER──────────────┐         │
+│ │ The Eiffel Tower was      │ │ Built in [1923]contra by  │         │
+│ │ completed in 1889 for the │ │ [Frank Lloyd Wright]contra│         │
+│ │ Paris World's Fair...     │ │ for the [London Olympics] │         │
+│ └───────────────────────────┘ └───────────────────────────┘         │
+│ contradicted: "1923" · contradicted: "Frank Lloyd Wright"            │
+│ unsupported:  "London Olympics"                                      │
+│                                                                      │
+│ ▌What to try for this call:                                          │
+│ • Numeric contradiction — add "be exact about dates" to prompt       │
+│ • Proper noun substitution — instruct the model not to substitute    │
+│ • Move retrieved context closer to the question (recency bias)       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**How it helps you ship reliably:**
+
+| Problem you have | Where the dashboard takes you |
+|---|---|
+| "Our app suddenly started hallucinating." | Health hero → red, narrative names the worst channel, recommendations propose causes |
+| "Which model / tenant / endpoint is bad?" | Failure breakdown heatmap. Click the red cell → everything refilters |
+| "When did it start?" | Heatmap rows go green → red over time buckets. Use the time-range chips to bisect |
+| "What's the model actually getting wrong?" | Worst-offender cards show source context vs answer, with claims highlighted in colour |
+| "How do I fix it?" | Per-span action box on every offender card prescribes fixes tied to that exact failure pattern (numeric drift, invented citations, retrieval miss, etc.) |
+| "Is this a one-off or a pattern?" | Aggregate "Likely causes & next steps" panel re-runs the diagnostic engine on every filter change |
+
+**Tag spans for the channel breakdown** — peekr reads `attributes.model` automatically, plus `attributes.user_id` (set via `peekr.session(user_id=...)`) for the tenant chip. For endpoint, attach it yourself in your request handler:
+
+```python
+from peekr import trace, get_current_span
+
+@trace
+def handle_request(req):
+    get_current_span().attributes["endpoint"] = req.path
+    return call_llm(...)
+```
+
+Charts are Chart.js loaded from a CDN. The data is embedded directly in the HTML file — no server, no build step, send it to a teammate as an attachment.
 
 ## Supported clients
 

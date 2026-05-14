@@ -118,6 +118,8 @@
       <a href="#sessions">Sessions</a>
       <a href="#alerts">Alerts</a>
       <a href="#eval">Eval (LLM-as-judge)</a>
+      <a href="#hallucination">Hallucination detection</a>
+      <a href="#dashboard">Drift dashboard</a>
       <a href="#feedback">Feedback + export</a>
       <a href="#experiments">A/B experiments</a>
       <a href="#replay">Trace replay</a>
@@ -156,6 +158,8 @@
         <a href="#sessions">Sessions</a>
         <a href="#alerts">Alerts</a>
         <a href="#eval">Eval (LLM-as-judge)</a>
+        <a href="#hallucination">Hallucination detection</a>
+        <a href="#dashboard">Drift dashboard</a>
         <a href="#feedback">Feedback + export</a>
         <a href="#experiments">A/B experiments</a>
         <a href="#replay">Trace replay</a>
@@ -449,12 +453,21 @@ peekr.<span class="fn">instrument</span>(alerts=[<span class="fn">SlackAlert</sp
     <p>Evaluators run after each LLM span completes and write scores to <code>span.attributes["eval_scores"]</code>. A <code>_in_eval</code> guard prevents infinite recursion.</p>
     <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(evaluators=[
     peekr.eval.<span class="fn">Rubric</span>(<span class="st">"Be concise and factually accurate"</span>),
-    peekr.eval.<span class="fn">NotEmpty</span>(),   <span class="cm"># output must be non-empty</span>
-    peekr.eval.<span class="fn">NoError</span>(),    <span class="cm"># span must have status=ok</span>
+    peekr.eval.<span class="fn">Hallucination</span>(),   <span class="cm"># groundedness check (see below)</span>
+    peekr.eval.<span class="fn">NotEmpty</span>(),       <span class="cm"># output must be non-empty</span>
+    peekr.eval.<span class="fn">NoError</span>(),        <span class="cm"># span must have status=ok</span>
 ])</code></pre>
+    <p>Scores are written to <code>span.attributes["eval_scores"]</code> as a <code>{evaluator_name: float}</code> dict and shown inline by <code>peekr view --io</code>:</p>
+    <pre><div class="pre-header">peekr view --io traces.jsonl</div><code><span class="fn">openai.chat.completions</span> [gpt-4o]  843ms  312tok
+   in:  "Summarise this doc..."
+   out: "The doc argues that..."
+   <span class="gr">eval_scores: {Rubric: 0.92, Hallucination: 0.95, NotEmpty: 1.0, NoError: 1.0}</span></code></pre>
     <p>Query scores in SQLite:</p>
-    <pre><div class="pre-header">sql</div><code>SELECT name, AVG(json_extract(attributes,'$.eval_scores.Rubric')) rubric_avg
-FROM spans WHERE json_extract(attributes,'$.eval_scores') IS NOT NULL
+    <pre><div class="pre-header">sql</div><code>SELECT name,
+       AVG(json_extract(attributes,'$.eval_scores.Rubric'))        rubric_avg,
+       AVG(json_extract(attributes,'$.eval_scores.Hallucination')) hallucination_avg
+FROM spans
+WHERE json_extract(attributes,'$.eval_scores') IS NOT NULL
 GROUP BY name;</code></pre>
     <p>Write your own evaluator:</p>
     <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.eval <span class="kw">import</span> BaseEvaluator
@@ -466,9 +479,157 @@ GROUP BY name;</code></pre>
     <div class="table-wrap"><table>
       <tr><th>Evaluator</th><th>What it checks</th><th>Requires</th></tr>
       <tr><td><code>Rubric(criteria)</code></td><td>LLM scores output against your criteria (0.0–1.0)</td><td>openai or anthropic SDK</td></tr>
+      <tr><td><code>Hallucination()</code></td><td>Fraction of claims grounded in the input/context (0.0–1.0)</td><td>openai or anthropic SDK</td></tr>
       <tr><td><code>NotEmpty()</code></td><td>Output attribute is non-empty string</td><td>Nothing</td></tr>
       <tr><td><code>NoError()</code></td><td>Span status is "ok"</td><td>Nothing</td></tr>
     </table></div>
+
+    <!-- HALLUCINATION -->
+    <h2 id="hallucination">Hallucination detection</h2>
+    <p>The <code>Hallucination</code> evaluator scores how well an LLM output is supported by its input context. It uses an LLM-as-judge under the hood — the same fallback pattern as <code>Rubric</code> (OpenAI first, then Anthropic).</p>
+    <div class="table-wrap"><table>
+      <tr><th>Score</th><th>Meaning</th></tr>
+      <tr><td><code>1.0</code></td><td>Every factual claim in the output is supported by the context</td></tr>
+      <tr><td><code>0.0</code></td><td>No claim is supported — the output is fully hallucinated</td></tr>
+      <tr><td>between</td><td>The fraction of claims grounded in the context</td></tr>
+    </table></div>
+    <p>Plug it in like any other evaluator:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(evaluators=[peekr.eval.<span class="fn">Hallucination</span>()])
+
+<span class="kw">import</span> openai
+openai.chat.completions.<span class="fn">create</span>(
+    model=<span class="st">"gpt-4o"</span>,
+    messages=[
+        {<span class="st">"role"</span>: <span class="st">"system"</span>, <span class="st">"content"</span>: <span class="st">"The Eiffel Tower was completed in 1889 in Paris."</span>},
+        {<span class="st">"role"</span>: <span class="st">"user"</span>,   <span class="st">"content"</span>: <span class="st">"When was the Eiffel Tower built and by whom?"</span>},
+    ],
+)</code></pre>
+    <pre><div class="pre-header">peekr view --io traces.jsonl</div><code><span class="fn">openai.chat.completions</span> [gpt-4o]  843ms
+   in:  [{"role": "system", "content": "The Eiffel Tower was completed in 1889 in Paris."}, ...]
+   out: "The Eiffel Tower was built in <span class="rd">1923 by Frank Lloyd Wright</span>."
+   <span class="gr">eval_scores: {Hallucination: 0.0}</span>   ← invented year and architect</code></pre>
+    <h3>RAG flows: point it at retrieved documents</h3>
+    <p>By default the evaluator uses the span's <code>input</code> (the messages sent to the LLM) as the grounding context. For RAG flows where the source documents live elsewhere — say, on a parent tool span — pass a <code>context_extractor</code>:</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(evaluators=[
+    peekr.eval.<span class="fn">Hallucination</span>(
+        context_extractor=<span class="kw">lambda</span> span: span.attributes.<span class="fn">get</span>(<span class="st">"retrieved_docs"</span>, <span class="st">""</span>),
+        model=<span class="st">"gpt-4o-mini"</span>,   <span class="cm"># optional — defaults to gpt-4o-mini / claude-haiku</span>
+    ),
+])</code></pre>
+    <div class="callout">Spans with empty output or no available context return <code>1.0</code> (nothing to judge), so non-RAG spans don't drag down your average. The judge LLM call is cheap (max 10 output tokens) and runs after the original span completes — it never blocks the main request.</div>
+    <h3>Find your worst hallucinations</h3>
+    <pre><div class="pre-header">sql</div><code><span class="cm">-- Lowest-scoring outputs across all runs</span>
+SELECT trace_id,
+       json_extract(attributes,<span class="st">'$.eval_scores.Hallucination'</span>) AS hallucination,
+       json_extract(attributes,<span class="st">'$.output'</span>) AS output
+FROM spans
+WHERE hallucination IS NOT NULL AND hallucination &lt; <span class="fn">0.5</span>
+ORDER BY hallucination ASC, start_time DESC
+LIMIT <span class="fn">20</span>;
+
+<span class="cm">-- Hallucination rate by model</span>
+SELECT json_extract(attributes,<span class="st">'$.model'</span>) model,
+       AVG(json_extract(attributes,<span class="st">'$.eval_scores.Hallucination'</span>)) avg_groundedness,
+       COUNT(*) runs
+FROM spans
+WHERE json_extract(attributes,<span class="st">'$.eval_scores.Hallucination'</span>) IS NOT NULL
+GROUP BY model
+ORDER BY avg_groundedness ASC;</code></pre>
+    <div class="callout warn">Hallucination scoring uses an LLM judge, which is itself imperfect and costs tokens. Treat it as a useful smoke alarm — a sudden drop in average groundedness is a strong signal — not as ground truth for any single trace.</div>
+
+    <h3>Detailed mode — RAGAS-style claim decomposition</h3>
+    <p>The default mode returns a single score. <code>detailed=True</code> switches to a <a href="https://arxiv.org/abs/2309.15217" target="_blank" rel="noopener">RAGAS Faithfulness</a>-style pipeline: the judge first decomposes the output into atomic factual claims, then assigns each claim one of three verdicts:</p>
+    <div class="table-wrap"><table>
+      <tr><th>Verdict</th><th>Meaning</th></tr>
+      <tr><td><code>supported</code></td><td>Claim is directly entailed by CONTEXT</td></tr>
+      <tr><td><code>contradicted</code></td><td>Claim directly conflicts with CONTEXT</td></tr>
+      <tr><td><code>unsupported</code></td><td>CONTEXT is silent about the claim</td></tr>
+    </table></div>
+    <p>The score becomes <code>supported_count / total_claims</code> and the full breakdown lands on the span at <code>attributes.hallucination_details</code>:</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(evaluators=[peekr.eval.<span class="fn">Hallucination</span>(detailed=<span class="kw">True</span>)])</code></pre>
+    <pre><div class="pre-header">span.attributes.hallucination_details</div><code>{
+  <span class="st">"total"</span>: 3, <span class="st">"supported"</span>: 1, <span class="st">"contradicted"</span>: 2, <span class="st">"unsupported"</span>: 0,
+  <span class="st">"score"</span>: 0.33,
+  <span class="st">"claims"</span>: [
+    {<span class="st">"text"</span>: <span class="st">"The Eiffel Tower is in Paris"</span>,         <span class="st">"verdict"</span>: <span class="gr">"supported"</span>},
+    {<span class="st">"text"</span>: <span class="st">"It was built in 1923"</span>,                  <span class="st">"verdict"</span>: <span class="rd">"contradicted"</span>},
+    {<span class="st">"text"</span>: <span class="st">"It was designed by Frank Lloyd Wright"</span>, <span class="st">"verdict"</span>: <span class="rd">"contradicted"</span>}
+  ]
+}</code></pre>
+    <p>This is what powers the <a href="#dashboard">drift dashboard's</a> drill-down — you can see exactly which claims the model invented, not just an average score.</p>
+    <div class="callout">Detailed mode uses one judge call per span (just with more output tokens — JSON, capped at 800). Use simple mode for cheap continuous monitoring across many traces, and detailed mode for the spans you want to investigate. You can switch by re-running with a different <code>evaluators=</code> list.</div>
+
+    <!-- DASHBOARD -->
+    <h2 id="dashboard">Observability dashboard</h2>
+    <p>Generate a self-contained HTML report from your traces. Designed as a drop-in observability layer for any RAG or memory/agent pipeline — open the file in any browser, no server, no build step.</p>
+    <pre><div class="pre-header">terminal</div><code>peekr dashboard traces.db -o report.html   <span class="cm"># SQLite</span>
+peekr dashboard traces.jsonl                <span class="cm"># JSONL → ./dashboard.html</span>
+open report.html</code></pre>
+
+    <h3>Panels at a glance</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Panel</th><th>What it shows</th><th>How to act on it</th></tr>
+      <tr><td><strong>Health hero</strong></td><td>One 0–100 score with a coloured dot (green/yellow/orange/red), tier label, count of flagged calls, and Δ vs baseline.</td><td>Red → open the recommendations panel below.</td></tr>
+      <tr><td><strong>What's happening</strong></td><td>3–5 plain-English bullets summarising the situation: drift, worst channel, citation invention rate, error count.</td><td>Read top-to-bottom; the highest-priority finding is first.</td></tr>
+      <tr><td><strong>Filter chips</strong></td><td>Tenant · Model · Endpoint · Time range. Stack to drill in.</td><td>Click chips to refilter every panel. Click again to clear.</td></tr>
+      <tr><td><strong>Metric cards</strong></td><td>Hallucination · Rubric · Citations · Errors. Each with sparkline, Δ vs baseline, count of scored calls, and an action hint.</td><td>The hint at the bottom tells you the next step (e.g. <em>"30 flagged — review worst offenders below"</em>).</td></tr>
+      <tr><td><strong>Likely causes &amp; next steps</strong></td><td>Diagnostic engine — runs eight pattern-detection rules and surfaces ranked recommendations with cause + numbered fix list.</td><td>Each card has a severity badge and a "what to try" list specific to that pattern.</td></tr>
+      <tr><td><strong>Score over time</strong></td><td>Rolling 20-call mean of every evaluator, with dashed warning (0.7) and critical (0.5) threshold lines.</td><td>Hover for trace details; click a point to jump to its worst-offender card.</td></tr>
+      <tr><td><strong>Failure breakdown heatmap</strong></td><td>Channel × time grid. Rows = your models/tenants/endpoints. Columns = time buckets. Colour = mean Hallucination.</td><td>Red rows tell you <em>which</em> channel is failing; rows that go green → red tell you <em>when</em>. Click a cell to filter.</td></tr>
+      <tr><td><strong>Worst offenders</strong></td><td>12 lowest-scoring calls. Side-by-side context vs answer with contradicted claims highlighted, claim verdicts, citation list.</td><td>Each card ends with a <strong>"What to try for this call"</strong> box prescribing fixes specific to that span's failure pattern.</td></tr>
+    </table></div>
+
+    <h3>Diagnostic rules</h3>
+    <p>The recommendations panel inspects the filtered rows and emits cards from eight pattern-detection rules. Each card has a severity (<code>high</code> / <code>medium</code> / <code>low</code> / <code>info</code> / <code>good</code>), a plausible cause in plain English, and a numbered list of concrete fixes.</p>
+    <div class="table-wrap"><table>
+      <tr><th>Pattern</th><th>Triggers when</th><th>Sample recommendation</th></tr>
+      <tr><td>Invented citations</td><td>&gt; 30% of detected citation patterns aren't in context</td><td>Tighten prompt; verify citations post-hoc; try hybrid retrieval</td></tr>
+      <tr><td>High contradiction rate</td><td>&gt; 20% of judged claims directly contradict context</td><td>Strengthen system prompt; move context closer to question; reduce <code>max_tokens</code></td></tr>
+      <tr><td>Out-of-context elaboration</td><td>&gt; 25% unsupported claims with low contradiction</td><td>Add refusal instruction; check retrieval recall; coverage prompt</td></tr>
+      <tr><td>Channel concentration</td><td>&gt; 50% of flagged calls share one model/tenant/endpoint</td><td>Diff deploys; compare prompts; verify index coverage for that channel</td></tr>
+      <tr><td>Hallucination drift</td><td>Δ vs baseline &lt; −0.1</td><td>Use heatmap to localise; cross-reference deploys; use <code>peekr replay</code></td></tr>
+      <tr><td>Error spikes</td><td>&gt; 5% of calls have <code>status="error"</code></td><td>Check rate limits; verify fallback model quality; add retries</td></tr>
+      <tr><td>Citations all grounded</td><td>≥ 5 citations, 0 invented</td><td>Add an alert on citation invention rate to catch future regressions</td></tr>
+      <tr><td>Healthy</td><td>No patterns triggered</td><td>Set up <code>peekr.alert.ScoreFloor</code>; run the offline benchmark periodically</td></tr>
+    </table></div>
+
+    <h3>Per-span action items</h3>
+    <p>Every worst-offender card ends with a tailored <strong>"What to try for this call"</strong> panel — separate from the aggregate recommendations. It inspects that one span's claims, citations, and context to suggest fixes targeted to its specific failure pattern:</p>
+    <div class="table-wrap"><table>
+      <tr><th>Detected on this span</th><th>What the action box suggests</th></tr>
+      <tr><td>Empty / short context but long answer</td><td>Retrieval miss — inspect what your retriever returned</td></tr>
+      <tr><td>Invented URLs / arXiv / DOIs / titles</td><td>Per-kind prompt fix + post-hoc citation verification</td></tr>
+      <tr><td>Contradicted numbers / dates</td><td>"Copy numerics verbatim" instruction; <code>temperature=0</code></td></tr>
+      <tr><td>Contradicted proper nouns</td><td>Explicit "don't substitute names" instruction</td></tr>
+      <tr><td>Mostly unsupported claims, no contradictions</td><td>Add refusal: <em>"say I don't know if not in context"</em></td></tr>
+      <tr><td>Mostly contradicted claims</td><td>Move context closer to question; "context wins" instruction</td></tr>
+      <tr><td>Low score but no detailed claims</td><td>Enable <code>Hallucination(detailed=True)</code> to see what failed</td></tr>
+      <tr><td>Output much longer than context</td><td>Reduce <code>max_tokens</code>; long completions drift</td></tr>
+    </table></div>
+
+    <h3>Tag spans for the channel breakdown</h3>
+    <p>The heatmap groups by <code>attributes.model</code> (set automatically by the patches), <code>attributes.user_id</code> (set via <code>peekr.session(user_id=...)</code>), and <code>attributes.endpoint</code> (you set this). Without an <code>endpoint</code> attribute, the endpoint row of the heatmap simply doesn't render — the others still do.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> trace, get_current_span
+
+<span class="kw">@</span><span class="fn">trace</span>
+<span class="kw">def</span> <span class="fn">handle_request</span>(req):
+    <span class="fn">get_current_span</span>().attributes[<span class="st">"endpoint"</span>] = req.path
+    <span class="kw">return</span> <span class="fn">call_llm</span>(...)
+
+<span class="cm"># Or in a FastAPI middleware — one place, every request tagged</span>
+<span class="kw">@</span>app.<span class="fn">middleware</span>(<span class="st">"http"</span>)
+<span class="kw">async def</span> <span class="fn">tag_span</span>(request, call_next):
+    <span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=request.headers.<span class="fn">get</span>(<span class="st">"X-Tenant-Id"</span>)):
+        span, token = peekr.<span class="fn">start_span</span>(<span class="fn">f</span><span class="st">"http.{request.method}"</span>)
+        span.attributes[<span class="st">"endpoint"</span>] = request.url.path
+        <span class="kw">try</span>:
+            <span class="kw">return</span> <span class="kw">await</span> <span class="fn">call_next</span>(request)
+        <span class="kw">finally</span>:
+            peekr.<span class="fn">end_span</span>(span, token)</code></pre>
+
+    <div class="callout">The dashboard reads from JSONL or SQLite — whatever you configured in <code>peekr.instrument()</code>. It's a post-hoc tool: rerun it whenever you want a fresh snapshot. For a real-time view, use <code>peekr view --io</code> in the terminal.</div>
 
     <!-- FEEDBACK -->
     <h2 id="feedback">Feedback + export</h2>

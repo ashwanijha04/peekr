@@ -301,6 +301,21 @@
 
   <div class="scenario">
     <div class="scenario-header">
+      <div class="scenario-icon">🌀</div>
+      <div>
+        <h3>"My agent is hallucinating"</h3>
+        <span class="fix">Fix: score every output for groundedness, catch the regression</span>
+        <p>The <code style="background:var(--bg3);padding:0.1em 0.35em;border-radius:3px;font-family:'SFMono-Regular',monospace;font-size:0.82em;color:var(--green);">Hallucination</code> evaluator scores each LLM response against its context — 1.0 = every claim grounded, 0.0 = invented. Scores ride on the span and are queryable in SQL.</p>
+      </div>
+    </div>
+    <pre><span class="hl-blue">openai.chat</span> [gpt-4o]  843ms  312tok
+   in:  <span class="hl-muted">"The Eiffel Tower was completed in 1889 in Paris..."</span>
+   out: <span class="hl-red">"Built in 1923 by Frank Lloyd Wright."</span>     ← invented facts
+   <span class="hl-green">eval_scores: {Hallucination: 0.0, Rubric: 0.5}</span></pre>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
       <div class="scenario-icon">⏱️</div>
       <div>
         <h3>"My agent is too slow"</h3>
@@ -382,6 +397,109 @@ openai.chat.completions.<span class="fn">create</span>(
   </div>
 </section>
 
+<!-- DASHBOARD SHOWCASE -->
+<section class="dashboard-showcase" style="margin: 5rem auto;">
+  <div class="section-header">
+    <h2>An observability dashboard that tells you what to fix</h2>
+    <p>One command. One self-contained HTML file. No server, no signup. Designed for RAG and memory/agent pipelines.</p>
+  </div>
+
+  <div style="background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+      <div class="code-card">
+        <div class="code-card-header"><div class="dot"></div><div class="dot"></div><div class="dot"></div> terminal</div>
+        <pre><span class="hl-muted"># one command</span>
+peekr dashboard traces.db -o report.html
+open report.html</pre>
+      </div>
+      <div class="code-card">
+        <div class="code-card-header"><div class="dot"></div> health hero · what's happening</div>
+        <pre><span style="color:var(--red)">●</span> Hallucination health: <span style="color:var(--orange)">66/100</span>
+                <span style="color:var(--orange)">needs attention</span>
+30 of 134 calls flagged. <span style="color:var(--red)">↓ 12 pts</span>
+vs baseline 0.78.
+
+› Hallucination dropped <span style="color:var(--red)">27 pts</span>
+  from baseline.
+› Worst channel: gpt-4o-mini · acme
+  · /api/qa — 0.31 / 8 calls.
+› 4 of 12 citations were invented.</pre>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 2rem;">
+    <div class="scenario">
+      <div class="scenario-header">
+        <div class="scenario-icon">🧭</div>
+        <div>
+          <h3>Diagnoses common RAG failures</h3>
+          <span class="fix">For each pattern detected: cause + what to try</span>
+          <p>The "Likely causes &amp; next steps" panel runs eight diagnostic rules over your data and surfaces concrete fixes — retrieval misses, chunking issues, missing refusal prompts, channel concentration, error spikes.</p>
+        </div>
+      </div>
+      <pre><span class="hl-red">[HIGH]</span> Model is inventing citations (33%)
+   <span class="hl-muted">Out of 12 patterns in outputs, 8 don't</span>
+   <span class="hl-muted">appear in source context. Signature of</span>
+   <span class="hl-muted">a RAG flow where retrieval missed.</span>
+
+   <span class="hl-blue">What to try:</span>
+   1. Log retrieved chunks for a span
+   2. "Cite only sources in context"
+   3. Verify citations post-hoc
+   4. Hybrid retrieval (BM25 + dense)</pre>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-header">
+        <div class="scenario-icon">🔥</div>
+        <div>
+          <h3>Localises regressions in one click</h3>
+          <span class="fix">Channel × time heatmap shows <em>where</em> and <em>when</em></span>
+          <p>Rows are your models, tenants, and endpoints. Columns are time buckets. Red cells mean hallucinating in that window. Click any cell to refilter the whole dashboard to that channel.</p>
+        </div>
+      </div>
+      <pre><span class="hl-muted">model              10:00 11:00 12:00 13:00 14:00</span>
+gpt-4o-mini        <span class="hl-green">0.89</span>  <span style="color:#e3b341">0.71</span>  <span class="hl-orange">0.42</span>  <span class="hl-red">0.31</span>  <span class="hl-red">0.28</span>
+gpt-4o             <span class="hl-green">0.91</span>  <span class="hl-green">0.88</span>  <span style="color:#e3b341">0.76</span>  <span class="hl-green">0.81</span>  <span class="hl-green">0.79</span>
+claude-opus-4-5    <span class="hl-green">0.93</span>  <span class="hl-green">0.92</span>  <span class="hl-green">0.94</span>  <span class="hl-green">0.91</span>  <span class="hl-green">0.92</span>
+<span class="hl-muted">                   green grounded → red hallucinating</span></pre>
+    </div>
+  </div>
+
+  <div class="scenario">
+    <div class="scenario-header">
+      <div class="scenario-icon">🎯</div>
+      <div>
+        <h3>Every flagged call ships with its own fix list</h3>
+        <span class="fix">Per-span action box, computed from that call's failure pattern</span>
+        <p>Click a low point on the time-series and you jump to a worst-offender card showing the source context, the model's answer (with contradicted/unsupported claims highlighted), and a tailored "What to try for this call" panel.</p>
+      </div>
+    </div>
+    <pre>#1 <span class="hl-red">⬤0.00</span>  gpt-4o-mini · acme · /api/qa
+Q: When was the Eiffel Tower built and by whom?
+
+┌─SOURCE CONTEXT────────────┐ ┌─MODEL ANSWER──────────────┐
+│ The Eiffel Tower was      │ │ Built in <span class="hl-red">1923</span> by           │
+│ completed in 1889 for     │ │ <span class="hl-red">Frank Lloyd Wright</span> for     │
+│ the Paris World's Fair... │ │ the <span class="hl-orange">London Olympics</span>.       │
+└───────────────────────────┘ └───────────────────────────┘
+
+  <span class="hl-red">contradicted</span>  "1923"
+  <span class="hl-red">contradicted</span>  "Frank Lloyd Wright"
+  <span class="hl-orange">unsupported</span>   "London Olympics"
+
+  <span class="hl-blue">▌ What to try for this call:</span>
+  • Numeric contradiction (1923) — add "be exact about dates"
+  • Proper noun substitution — instruct not to substitute names
+  • Move retrieved context closer to the question</pre>
+  </div>
+
+  <div style="text-align: center; margin-top: 2.5rem;">
+    <a href="docs.html#dashboard" class="btn btn-primary">Dashboard docs →</a>
+  </div>
+</section>
+
 <!-- STORAGE OPTIONS -->
 <section class="storage">
   <div class="section-header">
@@ -444,6 +562,22 @@ WHERE status = 'error';</pre>
 FROM spans
 GROUP BY trace_id
 ORDER BY start_time;</pre>
+    </div>
+    <div class="sql-card">
+      <div class="sql-card-label">Find the worst hallucinations</div>
+      <pre>SELECT trace_id,
+       json_extract(attributes,'$.eval_scores.Hallucination') h,
+       json_extract(attributes,'$.output') out
+FROM spans
+WHERE h IS NOT NULL AND h &lt; 0.5
+ORDER BY h ASC LIMIT 20;</pre>
+    </div>
+    <div class="sql-card">
+      <div class="sql-card-label">Eval scores by model</div>
+      <pre>SELECT json_extract(attributes,'$.model') model,
+       AVG(json_extract(attributes,'$.eval_scores.Hallucination')) groundedness,
+       AVG(json_extract(attributes,'$.eval_scores.Rubric')) quality
+FROM spans GROUP BY model;</pre>
     </div>
   </div>
 </section>
@@ -536,7 +670,10 @@ ORDER BY start_time;</pre>
     <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any sync or async function. Captures inputs, outputs, latency, and errors.</p></div>
     <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id)</code> groups spans across multi-turn conversations by user.</p></div>
     <div class="feature-card"><div class="feature-icon">🚨</div><h3>Alerts</h3><p>Fire when error rate, latency, token spend, or cost spikes cross your threshold.</p></div>
-    <div class="feature-card"><div class="feature-icon">🧠</div><h3>LLM-as-judge eval</h3><p>Score every LLM response automatically with <code>Rubric</code>, <code>NotEmpty</code>, and <code>NoError</code> evaluators.</p></div>
+    <div class="feature-card"><div class="feature-icon">🧠</div><h3>LLM-as-judge eval</h3><p>Score every LLM response automatically with <code>Rubric</code>, <code>NotEmpty</code>, and <code>NoError</code>. Scores ride on each span as <code>eval_scores</code>.</p></div>
+    <div class="feature-card"><div class="feature-icon">🌀</div><h3>Hallucination detection</h3><p><code>Hallucination()</code> scores how grounded each output is in its context (0.0–1.0). Plug in your retrieved docs for RAG flows.</p></div>
+    <div class="feature-card"><div class="feature-icon">🧬</div><h3>RAGAS-style claim decomposition</h3><p><code>Hallucination(detailed=True)</code> splits outputs into atomic claims and verdicts each one — <code>supported</code>, <code>contradicted</code>, or <code>unsupported</code>.</p></div>
+    <div class="feature-card"><div class="feature-icon">📈</div><h3>Observability dashboard</h3><p><code>peekr dashboard</code> emits one self-contained HTML file — health hero, channel-and-time heatmap, AI-generated recommendations, and per-call action items.</p></div>
     <div class="feature-card"><div class="feature-icon">👍</div><h3>Feedback + export</h3><p>Rate traces good/bad. Export labelled data as OpenAI fine-tuning JSONL in one command.</p></div>
     <div class="feature-card"><div class="feature-icon">🔬</div><h3>A/B experiments</h3><p><code>@peekr.experiment(variants=[...])</code> routes traffic and tags spans. Analyse results with SQL.</p></div>
     <div class="feature-card"><div class="feature-icon">⏮️</div><h3>Trace replay</h3><p>Re-run any stored trace with the same inputs. Debug production issues locally.</p></div>
