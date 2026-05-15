@@ -51,6 +51,7 @@ pip install peekr                   # base
 pip install "peekr[openai]"         # with OpenAI
 pip install "peekr[anthropic]"      # with Anthropic
 pip install "peekr[bedrock]"        # with AWS Bedrock
+pip install "peekr[gemini]"         # with Google Gemini
 pip install "peekr[langchain]"      # with LangChain / LangGraph
 pip install "peekr[llamaindex]"     # with LlamaIndex
 pip install "peekr[crewai]"         # with CrewAI
@@ -404,6 +405,7 @@ add_exporter(MyExporter())
 | OpenAI | `openai` | `pip install "peekr[openai]"` |
 | Anthropic | `anthropic` | `pip install "peekr[anthropic]"` |
 | AWS Bedrock | `boto3` | `pip install "peekr[bedrock]"` |
+| Google Gemini | `google-genai` (or legacy `google-generativeai`) | `pip install "peekr[gemini]"` |
 
 **Agent frameworks**
 
