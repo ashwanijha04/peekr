@@ -301,6 +301,10 @@ def _rows(llm_spans: list[dict]) -> list[dict[str, Any]]:
             "details":          attrs.get("hallucination_details"),
             "citation_details": attrs.get("citation_details"),
             "error":  attrs.get("error"),
+            # Evaluator failures (judge unreachable, parse error, etc.). Empty
+            # dict when no failures — distinct from a real 0.0 score, which
+            # lives in `eval_scores`.
+            "eval_errors": dict(attrs.get("eval_errors") or {}),
         })
     return out
 
@@ -727,6 +731,15 @@ _TEMPLATE = r"""<!DOCTYPE html>
   .citation .badge { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; margin-left: auto; }
   .citation.invented .badge { color: var(--red); }
   .citation.grounded .badge { color: var(--green); }
+
+  /* Judge-unavailable banner — shown when an evaluator raised on this span.
+     Distinct visual from "low score" so users don't conflate the two. */
+  .judge-error { margin-top: 0.7rem; padding: 0.7rem 0.85rem; background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.35); border-left: 3px solid var(--red); border-radius: 6px; font-size: 0.83rem; line-height: 1.5; color: #ffd0cc; }
+  .judge-error-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red); margin-bottom: 0.35rem; }
+  .judge-error-row { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.78rem; padding: 0.15rem 0; }
+  .judge-error-row code { background: rgba(248,81,73,0.18); padding: 0.05em 0.3em; border-radius: 3px; }
+  .judge-error-hint { margin-top: 0.45rem; color: var(--muted); font-size: 0.78rem; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  .judge-error-hint code { background: var(--bg2); padding: 0.1em 0.35em; border-radius: 3px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.85em; }
 
   /* Per-span action box at the bottom of each offender card */
   .span-actions { margin-top: 0.85rem; padding: 0.7rem 0.85rem; background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.25); border-left: 3px solid var(--accent); border-radius: 6px; }
@@ -1488,6 +1501,35 @@ function diagnoseRecommendations(rows) {
     return recs;
   }
 
+  // ── 0. Judge unavailable (very high-priority — runs before any other diagnostic) ──
+  // Count spans that have eval_errors. If a substantial share fail, the scores
+  // you see are NOT representative — the diagnostic engine should say so loudly.
+  const errorRows = rows.filter(r => r.eval_errors && Object.keys(r.eval_errors).length > 0);
+  if (errorRows.length >= Math.max(3, rows.length * 0.1)) {
+    // Pull up to two distinct example error messages to surface in the card.
+    const exemplars = new Set();
+    for (const r of errorRows) {
+      for (const v of Object.values(r.eval_errors)) {
+        exemplars.add(String(v));
+        if (exemplars.size >= 2) break;
+      }
+      if (exemplars.size >= 2) break;
+    }
+    const exemplarList = [...exemplars].map(e => `<code>${esc(e)}</code>`).join(" · ");
+    recs.push({
+      severity: "high",
+      title: `LLM judge unavailable for ${errorRows.length} of ${rows.length} spans`,
+      cause: `The Hallucination/Rubric evaluator raised on these spans, most likely because the configured provider has no credentials. Spans show no score (not 0.0) — your dashboard scores are sampled from the spans where the judge succeeded, if any. Example errors seen: ${exemplarList || "(see span details)"}.`,
+      checks: [
+        `<strong>Set the API key</strong> for your provider: <code>export OPENAI_API_KEY=...</code> or <code>export ANTHROPIC_API_KEY=...</code>.`,
+        `<strong>Force a provider explicitly</strong> if both SDKs are installed but only one is configured: <code>peekr.eval.Hallucination(judge_provider="anthropic")</code>.`,
+        `<strong>Verify with a smoke test:</strong> <code>python -c "from peekr.eval._judge import call_judge; print(call_judge('Return 1.0'))"</code>.`,
+        `<strong>Check transitive dependencies</strong> — if <code>openai</code> is pulled in by another package but you only configure Anthropic, auto-selection now correctly picks Anthropic when only <code>ANTHROPIC_API_KEY</code> is set.`,
+      ],
+      evidence: `${errorRows.length} spans have eval_errors. Score distributions and drift figures shown above EXCLUDE failed judges.`,
+    });
+  }
+
   // ── 1. Invented citations dominate ──
   if (cit.total >= 5 && cit.invented / cit.total > 0.3) {
     const rate = cit.invented / cit.total;
@@ -1856,6 +1898,20 @@ function renderOffenders(rows) {
       ).join("") + `</div>`;
     }
 
+    // Judge-unavailable banner: the LLM judge raised when scoring this span.
+    // We surface the error so users don't read missing scores as "0.0 = bad".
+    let errorsHtml = "";
+    const errs = r.eval_errors || {};
+    const errKeys = Object.keys(errs);
+    if (errKeys.length) {
+      errorsHtml = `
+        <div class="judge-error">
+          <div class="judge-error-label">⚠ Judge unavailable for this span</div>
+          ${errKeys.map(k => `<div class="judge-error-row"><code>${esc(k)}</code> — ${esc(errs[k])}</div>`).join("")}
+          <div class="judge-error-hint">Score is missing, not zero. Set <code>OPENAI_API_KEY</code> or <code>ANTHROPIC_API_KEY</code>, or pass <code>judge_provider="anthropic"</code> to force a specific provider.</div>
+        </div>`;
+    }
+
     // Per-span action items derived from this one call's failure pattern
     const actions = perSpanActions(r);
     let actionsHtml = "";
@@ -1895,6 +1951,7 @@ function renderOffenders(rows) {
             </div>
           </div>
           ${claimsHtml}
+          ${errorsHtml}
           ${citationsHtml}
           ${actionsHtml}
         </div>

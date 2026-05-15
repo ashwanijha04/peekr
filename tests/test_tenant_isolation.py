@@ -53,7 +53,7 @@ class TestEvalScoreIsolation:
         s_a = make_llm_span("acme",   output="answer A")
         s_b = make_llm_span("globex", output="answer B")
 
-        with patch("peekr.eval.hallucination.openai") as mock_oai:
+        with patch("peekr.eval._judge.openai") as mock_oai:
             # Return distinct scores so we can tell which call produced which write
             mock_oai.chat.completions.create.side_effect = [
                 MagicMock(choices=[MagicMock(message=MagicMock(content="0.10"))]),
@@ -82,7 +82,7 @@ class TestEvalScoreIsolation:
                 {"text": "B is correct", "verdict": "supported"},
             ]})))]),
         ]
-        with patch("peekr.eval.hallucination.openai") as mock_oai:
+        with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = responses
             exporter = EvalExporter(evaluators=[Hallucination(detailed=True)])
             exporter.export(s_a)
@@ -120,7 +120,7 @@ class TestConcurrentTenants:
                     return MagicMock(choices=[MagicMock(message=MagicMock(content=str(score)))])
             return MagicMock(choices=[MagicMock(message=MagicMock(content="0.5"))])
 
-        with patch("peekr.eval.hallucination.openai") as mock_oai:
+        with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = judge
 
             exporter = EvalExporter(evaluators=[Hallucination()])

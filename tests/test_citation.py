@@ -150,7 +150,7 @@ class TestComposedSignals:
         )
         mock_resp = MagicMock()
         mock_resp.choices[0].message.content = "0.4"
-        with patch("peekr.eval.hallucination.openai") as mock_oai:
+        with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.return_value = mock_resp
             exporter = EvalExporter(evaluators=[Hallucination(), CitationAccuracy()])
             exporter.export(s)

@@ -9,17 +9,6 @@ from . import BaseEvaluator
 if TYPE_CHECKING:
     from ..span import Span
 
-try:
-    import openai  # type: ignore
-except ImportError:
-    openai = None  # type: ignore
-
-try:
-    import anthropic  # type: ignore
-except ImportError:
-    anthropic = None  # type: ignore
-
-
 _FLOAT_RE = re.compile(r"-?\d+(?:\.\d+)?")
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
 _VALID_VERDICTS = ("supported", "contradicted", "unsupported")
@@ -113,10 +102,29 @@ class Hallucination(BaseEvaluator):
         context_extractor: Callable[["Span"], str] | None = None,
         model: str | None = None,
         detailed: bool = False,
+        judge_provider: str = "auto",
     ) -> None:
+        """
+        Parameters
+        ----------
+        context_extractor
+            Optional callable that pulls the grounding context out of a span.
+            Defaults to ``span.attributes["input"]``.
+        model
+            Override the judge model. Defaults to ``gpt-4o-mini`` (OpenAI) or
+            ``claude-haiku-4-5-20251001`` (Anthropic).
+        detailed
+            ``True`` runs the RAGAS-style claim decomposition; default ``False``
+            returns a single 0-1 score.
+        judge_provider
+            ``"auto"`` (default) picks whichever SDK has credentials in env.
+            ``"openai"`` / ``"anthropic"`` forces a specific provider — useful
+            when both SDKs are installed but only one is configured.
+        """
         self.context_extractor = context_extractor
         self.model = model
         self.detailed = detailed
+        self.judge_provider = judge_provider
 
     @property
     def name(self) -> str:
@@ -200,29 +208,19 @@ class Hallucination(BaseEvaluator):
         return score
 
     # ------------------------------------------------------------------
-    # Provider routing — OpenAI preferred, Anthropic fallback (same as Rubric)
+    # Provider routing — delegated to _judge.call_judge so the selection
+    # logic (env-key-aware, with explicit override) lives in one place.
+    # See peekr/eval/_judge.py for the algorithm.
     # ------------------------------------------------------------------
 
     def _judge(self, prompt: str, max_tokens: int, fallback: str) -> str:
-        if openai is not None:
-            response = openai.chat.completions.create(
-                model=self.model or "gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-            )
-            return response.choices[0].message.content or fallback
-
-        if anthropic is not None:
-            client = anthropic.Anthropic()
-            response = client.messages.create(
-                model=self.model or "claude-haiku-4-5-20251001",
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            return response.content[0].text if response.content else fallback
-
-        raise ImportError(
-            "Hallucination evaluator requires either 'openai' or 'anthropic' to be installed."
+        from ._judge import call_judge
+        return call_judge(
+            prompt,
+            max_tokens=max_tokens,
+            model=self.model,
+            provider=self.judge_provider,
+            fallback=fallback,
         )
 
 

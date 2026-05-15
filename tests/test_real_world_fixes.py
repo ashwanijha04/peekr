@@ -287,7 +287,7 @@ class TestFix6HallucinationOnToolUse:
     def test_tool_use_output_returns_one_without_calling_judge(self):
         """`ToolUseBlock(...)` style outputs must not be sent to the judge —
         the score is 1.0 (not-evaluable) and the details record the reason."""
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             ev = Hallucination(detailed=True)
             s = Span(name="anthropic.messages", trace_id="t")
             s.attributes["input"] = "Find the user's order items."
@@ -303,7 +303,7 @@ class TestFix6HallucinationOnToolUse:
             assert s.attributes["hallucination_details"]["reason"] == "tool call, not a generation"
 
     def test_json_payload_output_is_also_skipped(self):
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             ev = Hallucination()
             s = Span(name="anthropic.messages", trace_id="t")
             s.attributes["input"] = "ctx"
@@ -315,7 +315,7 @@ class TestFix6HallucinationOnToolUse:
         """Don't over-fit: real free-text outputs must still hit the judge."""
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "0.62"
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             ev = Hallucination()
             s = Span(name="openai.chat.completions", trace_id="t")

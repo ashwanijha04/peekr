@@ -80,17 +80,30 @@ class EvalExporter:
         token = _in_eval.set(True)
         try:
             scores: dict[str, float] = {}
+            errors: dict[str, str] = {}
             for evaluator in self.evaluators:
                 try:
                     score = evaluator.evaluate(span)
                     scores[evaluator.name] = score
-                except Exception:
-                    # Don't let a failing evaluator crash the exporter
-                    scores[evaluator.name] = 0.0
+                except Exception as e:
+                    # Distinguish "evaluator crashed" from "evaluator returned 0.0".
+                    # Storing 0.0 on crash made every span show as fully
+                    # hallucinated when the judge LLM was unreachable (no API
+                    # key, rate limit, network) — reported by users running
+                    # peekr against an Anthropic-only workload while having
+                    # `openai` installed as a transitive dep.
+                    #
+                    # Instead, record the error on a separate attribute so
+                    # downstream tooling (dashboard, alerts, queries) can
+                    # surface "judge unavailable" vs "score is genuinely 0.0".
+                    errors[evaluator.name] = f"{type(e).__name__}: {e}"
 
             if scores:
                 span.attributes.setdefault("eval_scores", {})
                 span.attributes["eval_scores"].update(scores)
+            if errors:
+                span.attributes.setdefault("eval_errors", {})
+                span.attributes["eval_errors"].update(errors)
         finally:
             _in_eval.reset(token)
 

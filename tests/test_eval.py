@@ -141,7 +141,12 @@ class TestEvalExporter:
         assert scores["Eval1"] == pytest.approx(0.8)
         assert scores["Eval2"] == pytest.approx(0.4)
 
-    def test_failing_evaluator_gets_zero(self):
+    def test_failing_evaluator_recorded_as_eval_error_not_silent_zero(self):
+        """Behaviour change: previously a crashing evaluator was stored as
+        a 0.0 score. That made "judge unavailable" indistinguishable from
+        "judge graded 0.0 = fully hallucinated" on the dashboard. The
+        exporter now records the exception in `eval_errors` and omits the
+        score entirely so consumers know it's missing, not zero."""
         class BrokenEvaluator(BaseEvaluator):
             @property
             def name(self):
@@ -153,7 +158,9 @@ class TestEvalExporter:
         exporter = EvalExporter(evaluators=[BrokenEvaluator()])
         span = make_llm_span()
         exporter.export(span)
-        assert span.attributes["eval_scores"]["BrokenEval"] == pytest.approx(0.0)
+        assert "BrokenEval" not in (span.attributes.get("eval_scores") or {})
+        assert "BrokenEval" in span.attributes["eval_errors"]
+        assert "boom" in span.attributes["eval_errors"]["BrokenEval"]
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +228,7 @@ class TestRubricMocked:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "0.85"
 
-        with patch("peekr.eval.rubric.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             rubric = Rubric("Be concise and factually accurate")
             span = make_llm_span(output="The capital of France is Paris.")
@@ -236,7 +243,7 @@ class TestRubricMocked:
         criteria = "Be concise"
         output_text = "Short answer."
 
-        with patch("peekr.eval.rubric.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             rubric = Rubric(criteria)
             span = make_llm_span(output=output_text)
@@ -260,8 +267,8 @@ class TestRubricMocked:
 
         # Patch openai to None at the module level so Rubric skips it,
         # and provide a mock anthropic client.
-        with patch("peekr.eval.rubric.openai", None):
-            with patch("peekr.eval.rubric.anthropic") as mock_anthropic:
+        with patch("peekr.eval._judge.openai", None):
+            with patch("peekr.eval._judge.anthropic") as mock_anthropic:
                 mock_client = MagicMock()
                 mock_anthropic.Anthropic.return_value = mock_client
                 mock_client.messages.create.return_value = mock_response
@@ -271,11 +278,15 @@ class TestRubricMocked:
 
         assert score == pytest.approx(0.7)
 
-    def test_rubric_raises_import_error_when_no_llm_available(self):
-        with patch("peekr.eval.rubric.openai", None), patch("peekr.eval.rubric.anthropic", None):
+    def test_rubric_raises_judge_unavailable_when_no_llm_installed(self):
+        """Behaviour change: previously raised ImportError. Now raises the
+        more specific JudgeUnavailable so callers (EvalExporter) can record
+        it as a judge problem rather than a programming error."""
+        from peekr.eval._judge import JudgeUnavailable
+        with patch("peekr.eval._judge.openai", None), patch("peekr.eval._judge.anthropic", None):
             rubric = Rubric("Be concise")
             span = make_llm_span()
-            with pytest.raises(ImportError):
+            with pytest.raises(JudgeUnavailable):
                 rubric.evaluate(span)
 
 
@@ -304,7 +315,7 @@ class TestParseScore:
 class TestHallucination:
     def test_returns_one_when_output_is_empty(self):
         # Nothing to hallucinate — don't penalize.
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             evaluator = Hallucination()
             span = make_llm_span(output="")
             assert evaluator.evaluate(span) == pytest.approx(1.0)
@@ -312,7 +323,7 @@ class TestHallucination:
 
     def test_returns_one_when_no_context_available(self):
         # No grounding source → not evaluable; don't poison the metric.
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             evaluator = Hallucination()
             span = Span(name="openai.chat.completions", trace_id="t1")
             span.attributes["output"] = "Paris is the capital of France."
@@ -324,7 +335,7 @@ class TestHallucination:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "0.9"
 
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             evaluator = Hallucination()
             span = make_llm_span(
@@ -340,7 +351,7 @@ class TestHallucination:
         context = "France's capital is Paris."
         output = "France's capital is Lyon."
 
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             evaluator = Hallucination()
             span = make_llm_span(input_text=context, output=output)
@@ -357,7 +368,7 @@ class TestHallucination:
         mock_response.choices[0].message.content = "1.0"
 
         retrieved_doc = "Berlin is the capital of Germany."
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             evaluator = Hallucination(
                 context_extractor=lambda s: retrieved_doc,
@@ -373,7 +384,7 @@ class TestHallucination:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "0.8"
 
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             evaluator = Hallucination(model="gpt-4o")
             span = make_llm_span(input_text="ctx", output="out")
@@ -385,8 +396,8 @@ class TestHallucination:
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="0.65")]
 
-        with patch("peekr.eval.hallucination.openai", None):
-            with patch("peekr.eval.hallucination.anthropic") as mock_anthropic:
+        with patch("peekr.eval._judge.openai", None):
+            with patch("peekr.eval._judge.anthropic") as mock_anthropic:
                 mock_client = MagicMock()
                 mock_anthropic.Anthropic.return_value = mock_client
                 mock_client.messages.create.return_value = mock_response
@@ -396,12 +407,16 @@ class TestHallucination:
 
         assert score == pytest.approx(0.65)
 
-    def test_raises_import_error_when_no_llm_available(self):
-        with patch("peekr.eval.hallucination.openai", None), \
-             patch("peekr.eval.hallucination.anthropic", None):
+    def test_raises_judge_unavailable_when_no_llm_installed(self):
+        """Behaviour change: previously raised ImportError. Now raises the
+        more specific JudgeUnavailable so EvalExporter records this as a
+        judge problem (eval_errors) rather than as a 0.0 score."""
+        from peekr.eval._judge import JudgeUnavailable
+        with patch("peekr.eval._judge.openai", None), \
+             patch("peekr.eval._judge.anthropic", None):
             evaluator = Hallucination()
             span = make_llm_span(input_text="ctx", output="out")
-            with pytest.raises(ImportError):
+            with pytest.raises(JudgeUnavailable):
                 evaluator.evaluate(span)
 
     def test_name(self):
@@ -412,7 +427,7 @@ class TestHallucination:
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "0.3"
 
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             exporter = EvalExporter(evaluators=[Hallucination()])
             span = make_llm_span(input_text="The sky is blue.", output="The sky is green.")
@@ -459,7 +474,7 @@ class TestHallucinationDetailed:
         return mock
 
     def test_score_is_supported_over_total(self):
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = self._judge_response([
                 {"text": "Claim 1", "verdict": "supported"},
                 {"text": "Claim 2", "verdict": "supported"},
@@ -472,7 +487,7 @@ class TestHallucinationDetailed:
         assert score == pytest.approx(0.5)
 
     def test_writes_details_to_span(self):
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = self._judge_response([
                 {"text": "A", "verdict": "supported"},
                 {"text": "B", "verdict": "contradicted"},
@@ -491,7 +506,7 @@ class TestHallucinationDetailed:
 
     def test_no_claims_extracted_returns_one(self):
         # Output is non-empty but the judge finds no factual claims → score 1.0.
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = self._judge_response([])
             evaluator = Hallucination(detailed=True)
             span = make_llm_span(input_text="ctx", output="How are you?")
@@ -500,7 +515,7 @@ class TestHallucinationDetailed:
         assert span.attributes["hallucination_details"]["total"] == 0
 
     def test_integration_via_eval_exporter_writes_both(self):
-        with patch("peekr.eval.hallucination.openai") as mock_openai:
+        with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = self._judge_response([
                 {"text": "A", "verdict": "supported"},
                 {"text": "B", "verdict": "unsupported"},
