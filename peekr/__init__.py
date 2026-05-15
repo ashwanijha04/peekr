@@ -1,6 +1,10 @@
 from __future__ import annotations
-from .exporters import add_exporter, JSONLExporter, ConsoleExporter, SQLiteExporter
-from .context import start_span, end_span, get_current_span
+from .exporters import (
+    add_exporter, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
+)
+from .context import (
+    start_span, end_span, get_current_span, set_process_defaults,
+)
 from .decorators import trace
 from .session import session
 from .feedback import feedback, export_feedback
@@ -26,6 +30,8 @@ def instrument(
     alerts: list = None,
     evaluators: list = None,
     evaluate_filter=None,
+    tenant_id: str | None = None,
+    retention_class: str | None = None,
 ):
     """
     Auto-instrument LLM SDKs (OpenAI, Anthropic, Bedrock) and agent
@@ -38,8 +44,17 @@ def instrument(
 
     alerts=[...]        → fire callbacks when thresholds are crossed
     evaluators=[...]    → score LLM outputs after each call
+
+    tenant_id           → process-wide default tenant (B2B customer org).
+                          Overridden per-request by peekr.session(tenant_id=...).
+                          Falls back to env PEEKR_TENANT_ID.
+    retention_class     → process-wide default retention tier.
+                          Recommended: "default" | "short" | "long" | "pii".
+                          Falls back to env PEEKR_RETENTION_CLASS.
     """
     global _patched
+
+    set_process_defaults(tenant_id=tenant_id, retention_class=retention_class)
 
     # Order matters. Exporters run in the order they're registered, on the
     # SAME span object. EvalExporter and AlertExporter mutate span.attributes
@@ -82,7 +97,7 @@ __all__ = [
     "instrument", "trace", "session",
     "start_span", "end_span", "get_current_span",
     # exporters
-    "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "add_exporter",
+    "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter", "add_exporter",
     # features
     "feedback", "export_feedback",
     "experiment",

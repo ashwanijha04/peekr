@@ -7,7 +7,7 @@
  */
 
 import { JSONLExporter, ConsoleExporter } from "./exporters.js";
-import { addExporter, clearExporters } from "./context.js";
+import { addExporter, clearExporters, setProcessDefaults } from "./context.js";
 import type { Exporter } from "./span.js";
 
 export interface InstrumentOptions {
@@ -21,6 +21,16 @@ export interface InstrumentOptions {
   exporters?: Exporter[];
   /** If true, reset the exporter registry before adding new exporters. Default: false. */
   reset?: boolean;
+  /**
+   * Process-wide default tenant (B2B customer org). Overridden per-request
+   * by withSession({ tenant_id }). Falls back to env PEEKR_TENANT_ID.
+   */
+  tenant_id?: string;
+  /**
+   * Process-wide default retention class. Falls back to env
+   * PEEKR_RETENTION_CLASS.
+   */
+  retention_class?: string;
 }
 
 let _instrumented = false;
@@ -32,9 +42,16 @@ export function instrument(options: InstrumentOptions = {}): void {
     jsonlPath = "./traces.jsonl",
     exporters = [],
     reset = false,
+    tenant_id,
+    retention_class,
   } = options;
 
   if (reset) clearExporters();
+
+  setProcessDefaults({
+    tenant_id: tenant_id ?? null,
+    retention_class: retention_class ?? null,
+  });
 
   if (useConsole) addExporter(new ConsoleExporter());
   if (storage === "jsonl") addExporter(new JSONLExporter(jsonlPath));

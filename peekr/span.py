@@ -15,6 +15,11 @@ class Span:
     end_time: float | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
     status: str = "ok"
+    # First-class so the hosted backend can route + index without JSON extraction.
+    # tenant_id = customer org (B2B), distinct from end-user (attributes.user_id).
+    # retention_class = "default" | "short" | "long" | "pii" — interpreted by storage tier.
+    tenant_id: str | None = None
+    retention_class: str | None = None
 
     def finish(self) -> None:
         self.end_time = time.time()

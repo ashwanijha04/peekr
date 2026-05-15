@@ -11,13 +11,16 @@ const openai = wrap(new OpenAI());
 
 const search = trace(async (query: string) => fetchResults(query));
 
-await withSession({ user_id: "tenant_acme" }, async () => {
-  await search("climate policy");
-  await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: "Summarise the docs above" }],
-  });
-});
+await withSession(
+  { user_id: "alice", tenant_id: "acme", retention_class: "long" },
+  async () => {
+    await search("climate policy");
+    await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "Summarise the docs above" }],
+    });
+  },
+);
 ```
 
 Then on any machine with the Python CLI:
@@ -36,7 +39,8 @@ For every wrapped LLM call and every traced function:
 - **Inputs / outputs** — JSON-stringified, truncated to 1000 chars by default.
 - **Tokens** — `tokens_input`, `tokens_output`, `tokens_total` from the LLM SDK response. Streaming is supported (we inject `stream_options.include_usage: true` so OpenAI emits a final usage chunk).
 - **Status + error** — `status: "error"` and `attributes.error` on rejection.
-- **Session / tenant** — `attributes.user_id` and `attributes.session_id` populated when inside `withSession(...)`.
+- **Session** — `attributes.user_id` and `attributes.session_id` populated when inside `withSession(...)`.
+- **Multi-tenant** — `tenant_id` (customer org) and `retention_class` (storage-tier hint) are first-class top-level fields on every span, distinct from `user_id` (the end-user). Set via `withSession({ tenant_id, retention_class })`, `instrument({ tenant_id, retention_class })`, or env vars `PEEKR_TENANT_ID` / `PEEKR_RETENTION_CLASS`.
 - **Endpoint** — set it yourself: `span.attributes["endpoint"] = req.path`. The Python dashboard's channel-drift heatmap groups by it.
 
 ## Public API
@@ -48,7 +52,8 @@ For every wrapped LLM call and every traced function:
 | `wrapOpenAI(client)` / `wrapAnthropic(client)` | Explicit wrappers if you prefer not to rely on auto-detect. |
 | `trace(fn)` / `trace(opts, fn)` | Wrap any sync/async function so each call becomes a span. |
 | `withSpan(name, fn)` | Run `fn(span)` inside a new child-span scope. The span auto-finishes when `fn` returns (or its promise resolves/rejects). |
-| `withSession({ user_id, session_id }, fn)` | Attach tenant/session attributes to every span created inside `fn`. |
+| `withSession({ user_id, session_id, tenant_id, retention_class }, fn)` | Attach identity + retention to every span created inside `fn`. |
+| `HTTPExporter({ endpoint, apiKey })` | Reserved exporter for Peekr Cloud. Stable signature; throws until cloud GA. [Waitlist](https://github.com/ashwanijha04/peekr/discussions). |
 | `getCurrentSpan()` | The innermost open span, or `null`. Useful for tagging extra attributes. |
 | `createDetachedSpan(name)` / `finishDetachedSpan(span)` | Low-level escape hatch for spans that outlive a callback (used internally for streaming responses). |
 | `JSONLExporter(path)` / `ConsoleExporter()` / `addExporter(e)` | Default exporters + custom ones. |
@@ -77,12 +82,14 @@ Every span written to JSONL has these fields, identical to [peekr's Python schem
   "end_time":   1778871223.274,
   "duration_ms": 158.0,
   "status": "ok",
+  "tenant_id": "acme",
+  "retention_class": "long",
   "attributes": {
     "model": "gpt-4o-mini",
     "input":  "[{\"role\":\"user\",\"content\":\"…\"}]",
     "output": "…",
     "tokens_input":  30, "tokens_output": 88, "tokens_total": 118,
-    "user_id":    "tenant_acme",
+    "user_id":    "alice",
     "session_id": "5cf889a6d1784c13acb033b8d5671762",
     "endpoint":   "/api/qa"
   }

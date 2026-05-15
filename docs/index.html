@@ -668,7 +668,8 @@ FROM spans GROUP BY model;</pre>
     <div class="feature-card"><div class="feature-icon">🔗</div><h3>Automatic nesting</h3><p>Spans link to parents via Python's <code>ContextVar</code>. Works across <code>async/await</code> without manual threading.</p></div>
     <div class="feature-card"><div class="feature-icon">🗄️</div><h3>SQLite storage</h3><p>WAL mode for concurrent writes. Query traces across runs directly with SQL.</p></div>
     <div class="feature-card"><div class="feature-icon">🎯</div><h3>@trace decorator</h3><p>Wrap any sync or async function. Captures inputs, outputs, latency, and errors.</p></div>
-    <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id)</code> groups spans across multi-turn conversations by user.</p></div>
+    <div class="feature-card"><div class="feature-icon">👤</div><h3>Session tracing</h3><p><code>peekr.session(user_id="alice", tenant_id="acme")</code> groups spans by user and customer org. Both first-class on every span.</p></div>
+    <div class="feature-card"><div class="feature-icon">🏢</div><h3>Multi-tenant schema</h3><p><code>tenant_id</code> + <code>retention_class</code> are first-class columns — indexed in SQLite, top-level in JSONL. Filter without <code>json_extract</code>.</p></div>
     <div class="feature-card"><div class="feature-icon">🚨</div><h3>Alerts</h3><p>Fire when error rate, latency, token spend, or cost spikes cross your threshold.</p></div>
     <div class="feature-card"><div class="feature-icon">🧠</div><h3>LLM-as-judge eval</h3><p>Score every LLM response automatically with <code>Rubric</code>, <code>NotEmpty</code>, and <code>NoError</code>. Scores ride on each span as <code>eval_scores</code>.</p></div>
     <div class="feature-card"><div class="feature-icon">🌀</div><h3>Hallucination detection</h3><p><code>Hallucination()</code> scores how grounded each output is in its context (0.0–1.0). Plug in your retrieved docs for RAG flows.</p></div>
@@ -682,10 +683,34 @@ FROM spans GROUP BY model;</pre>
   </div>
 </section>
 
+<!-- PEEKR CLOUD -->
+<section class="cloud" style="max-width: 860px; margin: 5rem auto; padding: 2.5rem 2rem; background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;">
+  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+    <span style="background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); border-radius: 4px; padding: 0.15rem 0.55rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;">COMING SOON</span>
+  </div>
+  <h2 style="font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.6rem;">Peekr Cloud</h2>
+  <p style="color: var(--muted); font-size: 1rem; line-height: 1.7; margin-bottom: 1.5rem;">
+    The OSS SDK is <strong>MIT licensed forever</strong> — that's not changing. When a single-process file isn't the right fit any more (multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage), Peekr Cloud is the optional managed backend.
+  </p>
+  <p style="color: var(--muted); font-size: 0.92rem; line-height: 1.7; margin-bottom: 1.5rem;">
+    The wire format is already in v0.3 — <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">tenant_id</code> and <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">retention_class</code> exist specifically so the spans you produce today work without modification when you connect:
+  </p>
+  <pre style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.25rem; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.82rem; line-height: 1.75; overflow-x: auto; margin-bottom: 1.75rem;"><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(
+    tenant_id=<span class="st">"acme"</span>,
+    exporter=peekr.<span class="fn">HTTPExporter</span>(
+        endpoint=<span class="st">"https://ingest.peekr.cloud"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,
+    ),
+)</pre>
+  <a href="https://github.com/ashwanijha04/peekr/discussions" class="btn btn-primary" style="display: inline-block;">Join the waitlist →</a>
+</section>
+
 <!-- STAR CTA -->
 <section class="star-cta" style="max-width: 860px;">
   <h2>If peekr saved you a debugging session,<br />give it a star ⭐</h2>
-  <p>It's open source, free forever, and takes 3 seconds. A star helps other developers find it and keeps the project growing.</p>
+  <p>The OSS SDK is open source, free forever, and takes 3 seconds. A star helps other developers find it and keeps the project growing.</p>
   <a href="https://github.com/ashwanijha04/peekr" class="btn-star-lg">⭐ Star on GitHub</a>
 </section>
 

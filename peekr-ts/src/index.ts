@@ -37,13 +37,15 @@ export {
   getCurrentSpan,
   withSession,
   getSession,
+  setProcessDefaults,
   addExporter,
   clearExporters,
   exportSpan,
 } from "./context.js";
 export type { SessionFields } from "./context.js";
 
-export { JSONLExporter, ConsoleExporter } from "./exporters.js";
+export { JSONLExporter, ConsoleExporter, HTTPExporter } from "./exporters.js";
+export type { HTTPExporterOptions } from "./exporters.js";
 
 export { Span, hexId, unixSeconds } from "./span.js";
 export type { Exporter, SpanRecord, SpanStatus } from "./span.js";

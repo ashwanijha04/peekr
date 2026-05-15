@@ -25,6 +25,10 @@ export interface SpanRecord {
   attributes: Record<string, unknown>;
   status: SpanStatus;
   duration_ms: number | null;
+  // First-class so the hosted backend can route + index without JSON
+  // extraction. Wire-compatible with peekr-py (`peekr/span.py`).
+  tenant_id: string | null;
+  retention_class: string | null;
 }
 
 export class Span {
@@ -36,6 +40,8 @@ export class Span {
   end_time: number | null = null;
   attributes: Record<string, unknown> = {};
   status: SpanStatus = "ok";
+  tenant_id: string | null = null;
+  retention_class: string | null = null;
 
   constructor(params: {
     name: string;
@@ -43,12 +49,16 @@ export class Span {
     parent_id?: string | null;
     span_id?: string;
     start_time?: number;
+    tenant_id?: string | null;
+    retention_class?: string | null;
   }) {
     this.name = params.name;
     this.trace_id = params.trace_id;
     this.parent_id = params.parent_id ?? null;
     this.span_id = params.span_id ?? hexId();
     this.start_time = params.start_time ?? unixSeconds();
+    this.tenant_id = params.tenant_id ?? null;
+    this.retention_class = params.retention_class ?? null;
   }
 
   finish(): void {
@@ -73,6 +83,8 @@ export class Span {
       attributes: this.attributes,
       status: this.status,
       duration_ms: this.duration_ms,
+      tenant_id: this.tenant_id,
+      retention_class: this.retention_class,
     };
   }
 }

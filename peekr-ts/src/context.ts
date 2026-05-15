@@ -30,10 +30,34 @@ interface Frame {
 const als = new AsyncLocalStorage<Frame>();
 
 export interface SessionFields {
+  /** End-user identifier (B2C). Stored in span.attributes.user_id. */
   user_id?: string;
+  /** Conversation/session correlation id. */
   session_id?: string;
+  /**
+   * Customer org identifier (B2B). First-class on the span — distinct from
+   * user_id. Required for multi-tenant routing in Peekr Cloud.
+   */
+  tenant_id?: string;
+  /**
+   * Storage tier hint (e.g. "default" | "short" | "long" | "pii").
+   * OSS stores it; Peekr Cloud enforces it.
+   */
+  retention_class?: string;
 }
 const sessionAls = new AsyncLocalStorage<SessionFields>();
+
+// Process-wide defaults set by instrument(). Lower priority than withSession().
+let _defaultTenantId: string | null = null;
+let _defaultRetentionClass: string | null = null;
+
+export function setProcessDefaults(opts: {
+  tenant_id?: string | null;
+  retention_class?: string | null;
+}): void {
+  if (opts.tenant_id !== undefined) _defaultTenantId = opts.tenant_id;
+  if (opts.retention_class !== undefined) _defaultRetentionClass = opts.retention_class;
+}
 
 export function getCurrentSpan(): Span | null {
   return als.getStore()?.span ?? null;
@@ -43,20 +67,44 @@ export function getSession(): SessionFields | null {
   return sessionAls.getStore() ?? null;
 }
 
-/** Start a session. All spans created inside the callback inherit user_id / session_id. */
+/** Start a session. All spans created inside the callback inherit the fields. */
 export function withSession<T>(fields: SessionFields, fn: () => T): T {
   const merged = { ...(sessionAls.getStore() ?? {}), ...fields };
   if (!merged.session_id) merged.session_id = hexId();
   return sessionAls.run(merged, fn);
 }
 
+function resolveTenantId(sess: SessionFields | null): string | null {
+  return (
+    sess?.tenant_id ??
+    _defaultTenantId ??
+    process.env.PEEKR_TENANT_ID ??
+    null
+  );
+}
+
+function resolveRetentionClass(sess: SessionFields | null): string | null {
+  return (
+    sess?.retention_class ??
+    _defaultRetentionClass ??
+    process.env.PEEKR_RETENTION_CLASS ??
+    null
+  );
+}
+
 function buildChildSpan(name: string): { span: Span; parentFrame: Frame | null } {
   const parentFrame = als.getStore() ?? null;
   const trace_id = parentFrame?.span.trace_id ?? hexId();
   const parent_id = parentFrame?.span.span_id ?? null;
-  const span = new Span({ name, trace_id, parent_id });
-
   const sess = getSession();
+  const span = new Span({
+    name,
+    trace_id,
+    parent_id,
+    tenant_id: resolveTenantId(sess),
+    retention_class: resolveRetentionClass(sess),
+  });
+
   if (sess?.session_id) span.attributes["session_id"] = sess.session_id;
   if (sess?.user_id) span.attributes["user_id"] = sess.user_id;
 

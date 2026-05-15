@@ -116,6 +116,7 @@
     <div class="sidebar-section">
       <div class="sidebar-label">Features</div>
       <a href="#sessions">Sessions</a>
+      <a href="#multi-tenant">Multi-tenant traces</a>
       <a href="#alerts">Alerts</a>
       <a href="#eval">Eval (LLM-as-judge)</a>
       <a href="#hallucination">Hallucination detection</a>
@@ -123,6 +124,7 @@
       <a href="#feedback">Feedback + export</a>
       <a href="#experiments">A/B experiments</a>
       <a href="#replay">Trace replay</a>
+      <a href="#peekr-cloud">Peekr Cloud</a>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-label">Reference</div>
@@ -156,6 +158,7 @@
       </div>
       <div class="toc-section"><div class="toc-label">Features</div>
         <a href="#sessions">Sessions</a>
+        <a href="#multi-tenant">Multi-tenant traces</a>
         <a href="#alerts">Alerts</a>
         <a href="#eval">Eval (LLM-as-judge)</a>
         <a href="#hallucination">Hallucination detection</a>
@@ -163,6 +166,7 @@
         <a href="#feedback">Feedback + export</a>
         <a href="#experiments">A/B experiments</a>
         <a href="#replay">Trace replay</a>
+        <a href="#peekr-cloud">Peekr Cloud</a>
         <a href="#span-fields">Span fields</a>
       </div>
     </details>
@@ -395,6 +399,8 @@ peekr.<span class="fn">instrument</span>()
       <tr><td><code>end_time</code></td><td>float</td><td>Unix timestamp</td></tr>
       <tr><td><code>duration_ms</code></td><td>float</td><td>Wall-clock duration in milliseconds</td></tr>
       <tr><td><code>status</code></td><td>"ok" | "error"</td><td>Whether the span succeeded</td></tr>
+      <tr><td><code>tenant_id</code></td><td>string | null</td><td>Customer org (B2B). First-class — top-level column in SQLite, top-level key in JSONL. Set via <code>peekr.session(tenant_id=...)</code>, <code>instrument(tenant_id=...)</code>, or env <code>PEEKR_TENANT_ID</code>.</td></tr>
+      <tr><td><code>retention_class</code></td><td>string | null</td><td>Storage-tier hint (e.g. <code>"default"</code>, <code>"short"</code>, <code>"long"</code>, <code>"pii"</code>). OSS stores it; storage tier interprets it.</td></tr>
       <tr><td><code>attributes.model</code></td><td>string</td><td>LLM model name (auto-captured)</td></tr>
       <tr><td><code>attributes.tokens_input</code></td><td>int</td><td>Prompt tokens (auto-captured)</td></tr>
       <tr><td><code>attributes.tokens_output</code></td><td>int</td><td>Completion tokens (auto-captured)</td></tr>
@@ -410,20 +416,45 @@ peekr.<span class="fn">instrument</span>()
 
     <!-- SESSIONS -->
     <h2 id="sessions">Sessions</h2>
-    <p>Group all spans for a user or conversation under a shared <code>session_id</code> and <code>user_id</code>. Uses <code>ContextVar</code> so it propagates correctly across async code.</p>
+    <p>Group all spans for a user, tenant, or conversation by passing identifiers to <code>peekr.session()</code>. Uses <code>ContextVar</code> so it propagates correctly across async code.</p>
     <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
 
-<span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"user_123"</span>, session_id=<span class="st">"sess_abc"</span>):
-    <span class="fn">run_agent</span>()  <span class="cm"># all spans tagged with user_id + session_id</span>
-
-<span class="cm"># session_id auto-generated if not provided</span>
-<span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"user_123"</span>):
+<span class="kw">with</span> peekr.<span class="fn">session</span>(
+    user_id=<span class="st">"user_123"</span>,           <span class="cm"># end-user (B2C)</span>
+    tenant_id=<span class="st">"acme"</span>,             <span class="cm"># customer org (B2B)</span>
+    session_id=<span class="st">"sess_abc"</span>,        <span class="cm"># auto-generated if omitted</span>
+    retention_class=<span class="st">"long"</span>,       <span class="cm"># storage-tier hint</span>
+):
     <span class="fn">run_agent</span>()</code></pre>
+    <p><code>tenant_id</code> and <code>retention_class</code> are first-class columns on the span — see <a href="#multi-tenant">Multi-tenant traces</a>.</p>
     <p>Query by user in SQLite:</p>
     <pre><div class="pre-header">sql</div><code>SELECT trace_id, AVG(duration_ms), SUM(json_extract(attributes,'$.tokens_total'))
 FROM spans
 WHERE json_extract(attributes,'$.user_id') = 'user_123'
 GROUP BY trace_id;</code></pre>
+
+    <!-- MULTI-TENANT -->
+    <h2 id="multi-tenant">Multi-tenant traces</h2>
+    <p>Every span carries two first-class fields — <code>tenant_id</code> (the customer org) and <code>retention_class</code> (a storage-tier hint) — separate from <code>user_id</code> (the end-user). A B2B agent can tag both without conflict.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>(tenant_id=<span class="st">"acme"</span>, retention_class=<span class="st">"default"</span>)
+
+<span class="kw">with</span> peekr.<span class="fn">session</span>(user_id=<span class="st">"alice"</span>, tenant_id=<span class="st">"acme"</span>,
+                   retention_class=<span class="st">"long"</span>):
+    <span class="fn">run_agent</span>()</code></pre>
+    <p>Resolution order, highest priority first:</p>
+    <ol>
+      <li><code>peekr.session(tenant_id=..., retention_class=...)</code></li>
+      <li><code>peekr.instrument(tenant_id=..., retention_class=...)</code></li>
+      <li>Env vars <code>PEEKR_TENANT_ID</code> / <code>PEEKR_RETENTION_CLASS</code></li>
+    </ol>
+    <p>Both fields are top-level columns in SQLite (with indices) and top-level keys in JSONL — no <code>json_extract</code> needed:</p>
+    <pre><div class="pre-header">sql</div><code>SELECT tenant_id, COUNT(*) FROM spans GROUP BY tenant_id;
+
+SELECT * FROM spans
+WHERE retention_class = 'long' AND start_time &gt; ?;</code></pre>
+    <p><code>retention_class</code> is a free-form string in the OSS SDK — recommended values are <code>default</code>, <code>short</code>, <code>long</code>, and <code>pii</code>. The meaning of each is enforced by your storage tier (or by <a href="#peekr-cloud">Peekr Cloud</a>).</p>
+    <div class="callout"><strong>Why first-class instead of <code>attributes.tenant_id</code>?</strong> So you can filter and index without JSON extraction — relevant the moment you have more than a handful of tenants or want to route ingestion. The SQLite exporter migrates pre-v0.3 databases automatically via <code>PRAGMA user_version</code>; legacy rows back-fill as <code>NULL</code>.</div>
 
     <!-- ALERTS -->
     <h2 id="alerts">Alerts</h2>
@@ -718,6 +749,22 @@ new_trace_id = <span class="fn">replay_trace</span>(trace_id=<span class="st">"a
 peekr replay a3f2b1c0 --db traces.db
 peekr replay a3f2b1c0 --jsonl traces.jsonl</code></pre>
     <div class="callout">Replay re-runs the stored LLM inputs through the live SDK. The agent itself is not re-invoked — only the LLM calls are replayed. This means tool calls are not replicated, but you get a new trace showing exactly what the model produces with those inputs today.</div>
+
+    <!-- PEEKR CLOUD -->
+    <h2 id="peekr-cloud">Peekr Cloud</h2>
+    <p>The OSS SDK runs in your process, writes to local files, and is <strong>MIT licensed forever</strong>. When a single-process file isn't the right fit any more — multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage — Peekr Cloud is the optional managed backend.</p>
+    <p>The wire format is already in the SDK. <code>tenant_id</code> and <code>retention_class</code> exist in v0.3 specifically so the spans you're producing today work without modification when you connect.</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(
+    tenant_id=<span class="st">"acme"</span>,
+    exporter=peekr.<span class="fn">HTTPExporter</span>(
+        endpoint=<span class="st">"https://ingest.peekr.cloud"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,
+    ),
+)</code></pre>
+    <p><code>HTTPExporter</code> ships as a stub in v0.3 — the constructor signature is stable so you can wire your call sites today, and they won't change when the implementation lands. Until then it raises <code>NotImplementedError</code> on <code>.export()</code> so a misconfigured pipeline fails loudly rather than silently dropping spans.</p>
+    <p><strong>Get on the waitlist</strong> → <a href="https://github.com/ashwanijha04/peekr/discussions">GitHub Discussions</a>.</p>
 
   </main>
 </div>
