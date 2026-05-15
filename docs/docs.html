@@ -563,10 +563,33 @@ ORDER BY avg_groundedness ASC;</code></pre>
 
     <!-- DASHBOARD -->
     <h2 id="dashboard">Observability dashboard</h2>
-    <p>Generate a self-contained HTML report from your traces. Designed as a drop-in observability layer for any RAG or memory/agent pipeline — open the file in any browser, no server, no build step.</p>
+    <p>Generate a self-contained, tabbed HTML report from your traces. Designed as a drop-in observability layer for any RAG or memory/agent pipeline — open the file in any browser, no server, no build step.</p>
     <pre><div class="pre-header">terminal</div><code>peekr dashboard traces.db -o report.html   <span class="cm"># SQLite</span>
 peekr dashboard traces.jsonl                <span class="cm"># JSONL → ./dashboard.html</span>
 open report.html</code></pre>
+
+    <h3>Five tabs, one URL</h3>
+    <p>The dashboard is organised so a non-technical observer can stay on the Overview tab and still get the gist, while an engineer can drill into Traces / Quality / Diagnose for specifics. Tab state is in the URL hash so links are shareable. A persistent filter bar at the top applies across every tab.</p>
+    <div class="table-wrap"><table>
+      <tr><th>Tab</th><th>For</th><th>Contents</th></tr>
+      <tr><td><code>#overview</code></td><td>First-impression / exec</td><td>Health hero (0–100), narrative bullets, 4 metric cards with sparklines, top 3 action items pulled from the diagnostic engine.</td></tr>
+      <tr><td><code>#traces</code></td><td>"Find me <em>that</em> call"</td><td>Search box (trace ID, model, content, error), sortable table, click any row → side panel with full context vs answer, claim verdicts, citations, per-call action items.</td></tr>
+      <tr><td><code>#quality</code></td><td>Trend monitoring</td><td>Rolling chart with warning (0.7) / critical (0.5) threshold lines, score distribution histogram, channel × time heatmap, claim-verdict doughnut, citation panel.</td></tr>
+      <tr><td><code>#diagnose</code></td><td>Incident response</td><td>"Likely causes &amp; next steps" with severity-tagged cards and numbered fix lists, plus the full worst-offenders panel with side-by-side highlighted context vs answer.</td></tr>
+      <tr><td><code>#help</code></td><td>First-time setup</td><td>Setup checklist (auto-ticks live), glossary, evaluator configuration snippets, troubleshooting, keyboard shortcuts.</td></tr>
+    </table></div>
+
+    <h3>Keyboard shortcuts</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td><code>1</code>–<code>5</code></td><td>Switch tabs</td></tr>
+      <tr><td><code>/</code></td><td>Jump to Traces tab and focus the search box</td></tr>
+      <tr><td><code>R</code></td><td>Clear all filters</td></tr>
+      <tr><td><code>Esc</code></td><td>Close the trace detail panel</td></tr>
+    </table></div>
+
+    <h3>Filter bar</h3>
+    <p>One persistent bar at the top of every tab. Click any chip to toggle that filter; every panel on every tab refilters immediately. The time-range chips include <strong>5m, 15m, 30m, 1h, 24h, 7d, 30d</strong> presets plus a Custom… option with <code>datetime-local</code> from/to inputs. The "When = Custom" mode seeds itself to "last 1h up to the newest timestamp" so first activation isn't empty.</p>
 
     <h3>Panels at a glance</h3>
     <div class="table-wrap"><table>

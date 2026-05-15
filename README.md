@@ -276,7 +276,7 @@ Same prompt cost as before (~one judge call), more output tokens. Use the simple
 
 ### Dashboard — `peekr dashboard`
 
-Generate a self-contained HTML observability report from your traces. Designed as a drop-in for any RAG or memory/agent pipeline: open the file in any browser, no server, no build step.
+Generate a self-contained, tabbed HTML observability report from your traces. Designed as a drop-in for any RAG or memory/agent pipeline: open the file in any browser, no server, no build step.
 
 ```bash
 peekr dashboard traces.db -o report.html   # SQLite
@@ -284,7 +284,19 @@ peekr dashboard traces.jsonl               # JSONL — writes ./dashboard.html
 open report.html
 ```
 
-**What you get on one page:**
+**Five tabs, one URL.** Keyboard shortcuts `1`–`5` switch tabs, `/` focuses search, `R` clears filters, `Esc` closes the trace detail panel. Tab state lives in the URL hash so links are shareable.
+
+| Tab | When to open it |
+|---|---|
+| **Overview** | First time you look at the dashboard, or after an incident. Health hero (0–100 score, traffic-light dot), plain-English narrative, metric cards with sparklines, top 3 action items. |
+| **Traces** | "What did this specific call look like?" — search bar (trace ID, model, content, error), sortable table, click any row to slide out a detail panel with context vs answer, claim verdicts, citations, and per-call action items. |
+| **Quality** | Trend monitoring. Rolling chart with warning/critical threshold lines, score distribution histogram, channel × time heatmap, claim-verdict doughnut, citation panel. |
+| **Diagnose** | When something's wrong. AI-generated "Likely causes & next steps" with severity badges and fix lists, plus the full worst-offenders panel with side-by-side context/answer highlighting. |
+| **Help** | First-time setup, glossary, evaluator configuration snippets, troubleshooting, keyboard shortcuts. The setup checklist auto-ticks as you wire things up. |
+
+**Persistent filter bar** at the top of every tab — tenant · model · endpoint chips · time range (5m / 15m / 30m / 1h / 24h / 7d / 30d / Custom datetime). One click refilters every panel across all tabs.
+
+**What you'll see on the Overview tab:**
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
