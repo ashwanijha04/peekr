@@ -1,0 +1,6 @@
+node_modules/
+dist/
+build-tests/
+*.log
+traces.jsonl
+dashboard.html

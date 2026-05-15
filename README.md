@@ -373,6 +373,15 @@ def handle_request(req):
 
 Charts are Chart.js loaded from a CDN. The data is embedded directly in the HTML file — no server, no build step, send it to a teammate as an attachment.
 
+## Languages
+
+| Runtime | Package | Status |
+|---|---|---|
+| **Python** | `pip install peekr` (this repo) | Stable — instrumentation, evaluators, dashboard, CLI |
+| **TypeScript / Node.js** | `npm install @peekr/sdk` (`peekr-ts/` in this repo) | Instrumentation + JSONL exporter. Run analysis with the Python CLI. |
+
+The TypeScript SDK writes the same JSONL schema as the Python one, so a Node app's traces can be analysed with `peekr view`, `peekr cost`, and `peekr dashboard` (which stay in Python — write-once, language-agnostic). See [`peekr-ts/README.md`](peekr-ts/README.md).
+
 ## Supported clients
 
 **LLM SDKs**
