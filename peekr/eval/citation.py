@@ -45,10 +45,40 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # Statute / section references — "Section 230", "§ 7", "Title VII".
     # No \b on the § alternative — § is non-word so a word boundary won't match it.
     ("section",    re.compile(r"(?:\bSection\s*|§\s*)\d+[A-Za-z]?\b")),
-    # Paper titles in quotes that contain meaningful punctuation/words.
-    # Require at least three words to avoid matching every quoted phrase.
-    ("quoted_title", re.compile(r"['\"“‘]([A-Z][^'\"”’]{8,120})['\"”’]")),
+    # Paper / book titles in quotes — REQUIRE a citation-shaped preamble like
+    # "in 'X'", "titled 'X'", "from 'X'", "see 'X'", "cited in 'X'", "per 'X'".
+    # Without this guard, any product name or claim string in quoted output
+    # (e.g. tool-use payloads, packing lists) matches and produces noisy
+    # "invented citation" flags. Reported by users running peekr on real RAG.
+    (
+        "quoted_title",
+        re.compile(
+            r"(?:\b(?:in|from|titled|named|called|see|cited\s+in|cited\s+by|per|according\s+to|read|wrote|published\s+in)\s+)"
+            r"['\"“‘]([A-Z][^'\"”’]{8,120})['\"”’]",
+            re.IGNORECASE,
+        ),
+    ),
 )
+
+# Outputs that *look like* structured tool calls or raw data dumps rather
+# than free-text answers. Citation extraction (and LLM-judge hallucination
+# scoring) is meaningless on these — we skip the evaluator instead of
+# emitting confident-but-wrong scores.
+_TOOL_CALL_PREFIXES: tuple[str, ...] = (
+    "ToolUseBlock",
+    "ToolResultBlock",
+    "TextBlock(",
+    "{",
+    "[",
+)
+
+
+def looks_like_tool_call(output: str) -> bool:
+    """Heuristic: True if `output` reads as a tool-call repr or JSON payload."""
+    if not isinstance(output, str):
+        return False
+    stripped = output.lstrip()
+    return stripped.startswith(_TOOL_CALL_PREFIXES)
 
 
 def _normalize(s: str) -> str:
@@ -111,6 +141,13 @@ class CitationAccuracy(BaseEvaluator):
     def evaluate(self, span: "Span") -> float:
         output = span.attributes.get("output", "")
         if not isinstance(output, str) or not output.strip():
+            return 1.0
+
+        # Skip tool-call / structured outputs — citation extraction is built
+        # for free-text prose and produces false positives on ToolUseBlock or
+        # raw JSON payloads (each Capitalized quoted value would look like
+        # an invented title).
+        if looks_like_tool_call(output):
             return 1.0
 
         if self.context_extractor is not None:

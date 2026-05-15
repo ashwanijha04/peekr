@@ -25,6 +25,7 @@ def instrument(
     db_path: str = "traces.db",
     alerts: list = None,
     evaluators: list = None,
+    evaluate_filter=None,
 ):
     """
     Auto-instrument LLM SDKs (OpenAI, Anthropic, Bedrock) and agent
@@ -40,23 +41,31 @@ def instrument(
     """
     global _patched
 
+    # Order matters. Exporters run in the order they're registered, on the
+    # SAME span object. EvalExporter and AlertExporter mutate span.attributes
+    # (eval_scores / alerts), so they MUST run before any storage exporter —
+    # otherwise JSONL/SQLite serialize the span before the scores are written
+    # and you get traces with empty `eval_scores`. (Reported by users running
+    # peekr with a real RAG workload.)
     if exporter:
         add_exporter(exporter)
     else:
+        # 1) Console first — purely a display tool, doesn't mutate.
         if console:
             add_exporter(ConsoleExporter())
+        # 2) Mutators (eval + alerts) BEFORE persistence.
+        if evaluators:
+            from .eval import EvalExporter
+            add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter))
+        if alerts:
+            from .alerts import AlertExporter
+            add_exporter(AlertExporter(alerts))
+        # 3) Persistence last — what's written to disk now includes any
+        #    attributes the mutators added (notably eval_scores).
         if storage in ("jsonl", "both"):
             add_exporter(JSONLExporter(jsonl_path))
         if storage in ("sqlite", "both"):
             add_exporter(SQLiteExporter(db_path))
-
-    if alerts:
-        from .alerts import AlertExporter
-        add_exporter(AlertExporter(alerts))
-
-    if evaluators:
-        from .eval import EvalExporter
-        add_exporter(EvalExporter(evaluators))
 
     if not _patched:
         patch_openai()

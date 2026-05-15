@@ -127,6 +127,27 @@ class Hallucination(BaseEvaluator):
         if not isinstance(output, str) or not output.strip():
             return 1.0
 
+        # Structured / tool-call outputs aren't free-text answers — the
+        # LLM judge is not designed for them. ToolUseBlock(...) is the
+        # Anthropic SDK's repr; raw JSON / Python literals show up when
+        # users dump tool I/O. Treat these as not-evaluable (score 1.0)
+        # rather than paying the judge to misgrade them as 0.0.
+        from .citation import looks_like_tool_call  # local import to avoid cycle
+        if looks_like_tool_call(output):
+            span.attributes.setdefault(
+                "hallucination_details",
+                {
+                    "claims": [],
+                    "supported": 0,
+                    "contradicted": 0,
+                    "unsupported": 0,
+                    "total": 0,
+                    "score": 1.0,
+                    "reason": "tool call, not a generation",
+                },
+            )
+            return 1.0
+
         if self.context_extractor is not None:
             context = self.context_extractor(span)
         else:

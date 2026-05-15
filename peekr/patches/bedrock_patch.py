@@ -75,6 +75,12 @@ def patch_bedrock():
         span_name = "bedrock.converse_stream" if is_streaming else "bedrock.converse"
         span, token = start_span(span_name)
         span.attributes["model"] = api_params.get("modelId", "unknown")
+        try:
+            from ..eval import _in_eval as _peekr_in_eval
+            if _peekr_in_eval.get():
+                span.attributes["peekr.internal"] = True
+        except Exception:  # pragma: no cover
+            pass
 
         messages = api_params.get("messages", [])
         if messages:

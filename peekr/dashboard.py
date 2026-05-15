@@ -30,7 +30,14 @@ def generate_dashboard(path: str, output: str = "dashboard.html") -> str:
     else:
         spans = _read_jsonl(path)
 
-    llm_spans = [s for s in spans if any(s["name"].startswith(p) for p in _LLM_PREFIXES)]
+    llm_spans = [
+        s for s in spans
+        if any(s["name"].startswith(p) for p in _LLM_PREFIXES)
+        # Hide evaluator-judge calls — they're already in the JSONL for auditing
+        # token costs, but they'd otherwise appear as duplicate worst-offender
+        # cards and skew distributions.
+        and not (s.get("attributes") or {}).get("peekr.internal")
+    ]
     llm_spans.sort(key=lambda s: s.get("start_time") or 0)
 
     data = {
@@ -288,6 +295,9 @@ def _rows(llm_spans: list[dict]) -> list[dict[str, Any]]:
             "NoError":          scores.get("NoError"),
             "input":  (attrs.get("input")  or "")[:600],
             "output": (attrs.get("output") or "")[:600],
+            # Fallback for Anthropic spans captured before the patch merged
+            # `system` into messages — the dashboard's parseInput uses this.
+            "system": (attrs.get("system") or "")[:600] if attrs.get("system") else None,
             "details":          attrs.get("hallucination_details"),
             "citation_details": attrs.get("citation_details"),
             "error":  attrs.get("error"),
@@ -823,17 +833,26 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <script>
 const DATA = __DATA_JSON__;
 
-const FILTER = { tenant: null, model: null, endpoint: null, time: "all" };
+// `time` is one of TIME_RANGES.key, or "custom" — in which case `customFrom`
+// and `customTo` are unix-seconds (nullable: open-ended on either side).
+const FILTER = {
+  tenant: null, model: null, endpoint: null,
+  time: "all", customFrom: null, customTo: null,
+};
 
 const TIME_RANGES = [
-  { key: "all", label: "All time",  seconds: null },
-  { key: "1h",  label: "Last 1h",   seconds: 60 * 60 },
-  { key: "24h", label: "Last 24h",  seconds: 24 * 60 * 60 },
-  { key: "7d",  label: "Last 7d",   seconds: 7 * 24 * 60 * 60 },
-  { key: "30d", label: "Last 30d",  seconds: 30 * 24 * 60 * 60 },
+  { key: "all", label: "All time", seconds: null },
+  { key: "5m",  label: "5 min",    seconds: 5 * 60 },
+  { key: "15m", label: "15 min",   seconds: 15 * 60 },
+  { key: "30m", label: "30 min",   seconds: 30 * 60 },
+  { key: "1h",  label: "1h",       seconds: 60 * 60 },
+  { key: "24h", label: "24h",      seconds: 24 * 60 * 60 },
+  { key: "7d",  label: "7d",       seconds: 7 * 24 * 60 * 60 },
+  { key: "30d", label: "30d",      seconds: 30 * 24 * 60 * 60 },
 ];
 
 function timeCutoff() {
+  if (FILTER.time === "custom") return 0; // custom uses both bounds; handled in applyFilter
   const r = TIME_RANGES.find(x => x.key === FILTER.time);
   if (!r || !r.seconds) return 0;
   // Anchor on the newest timestamp in the dataset (works for both live and historical files).
@@ -843,11 +862,15 @@ function timeCutoff() {
 
 function applyFilter(rows) {
   const cutoff = timeCutoff();
+  const customFrom = FILTER.time === "custom" ? FILTER.customFrom : null;
+  const customTo   = FILTER.time === "custom" ? FILTER.customTo   : null;
   return rows.filter(r => {
     if (FILTER.tenant   && r.tenant   !== FILTER.tenant)   return false;
     if (FILTER.model    && r.model    !== FILTER.model)    return false;
     if (FILTER.endpoint && r.endpoint !== FILTER.endpoint) return false;
     if (cutoff && (r.ts || 0) < cutoff) return false;
+    if (customFrom != null && (r.ts || 0) < customFrom) return false;
+    if (customTo   != null && (r.ts || 0) > customTo)   return false;
     return true;
   });
 }
@@ -911,12 +934,21 @@ function renderFilterBar() {
     }).join("");
     html += `<div class="filter-group"><span class="filter-label">${label}</span>${chips}</div>`;
   }
-  // Time-range group
+  // Time-range group (preset chips)
   const timeChips = TIME_RANGES.map(r => {
     const active = FILTER.time === r.key ? "active" : "";
     return `<span class="chip ${active}" data-time="${r.key}">${esc(r.label)}</span>`;
   }).join("");
-  html += `<div class="filter-group"><span class="filter-label">When</span>${timeChips}</div>`;
+  // Custom-range chip + collapsible datetime inputs. Active iff FILTER.time === "custom".
+  const customActive = FILTER.time === "custom" ? "active" : "";
+  html += `<div class="filter-group"><span class="filter-label">When</span>${timeChips}` +
+          `<span class="chip ${customActive}" data-time="custom" id="chip-custom">Custom…</span>` +
+          `<span id="custom-range-wrap" style="display:${FILTER.time === "custom" ? "inline-flex" : "none"};gap:0.4rem;align-items:center">` +
+            `<input type="datetime-local" id="custom-from" value="${esc(localDtValue(FILTER.customFrom))}" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.25rem 0.45rem;font-size:0.75rem;color-scheme:dark" />` +
+            `<span class="filter-count" style="margin:0">to</span>` +
+            `<input type="datetime-local" id="custom-to"   value="${esc(localDtValue(FILTER.customTo))}"   style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.25rem 0.45rem;font-size:0.75rem;color-scheme:dark" />` +
+          `</span>` +
+          `</div>`;
   html += `<span class="chip chip-reset" id="chip-reset">Clear filters</span>`;
   html += `<span class="filter-count" id="filter-count"></span>`;
   wrap.innerHTML = html;
@@ -930,14 +962,51 @@ function renderFilterBar() {
   wrap.querySelectorAll(".chip[data-time]").forEach(c => {
     c.addEventListener("click", () => {
       FILTER.time = c.dataset.time;
+      if (FILTER.time === "custom") {
+        // Seed defaults from the data range if first activation.
+        if (FILTER.customFrom == null && FILTER.customTo == null && DATA.rows.length) {
+          const tsList = DATA.rows.map(x => x.ts || 0).filter(Boolean);
+          FILTER.customTo = Math.max(...tsList);
+          FILTER.customFrom = FILTER.customTo - 3600;  // default to last 1h
+        }
+      }
       rerender();
     });
   });
+  const fromInput = document.getElementById("custom-from");
+  const toInput = document.getElementById("custom-to");
+  if (fromInput) {
+    fromInput.addEventListener("change", () => {
+      FILTER.customFrom = parseLocalDt(fromInput.value);
+      rerender();
+    });
+  }
+  if (toInput) {
+    toInput.addEventListener("change", () => {
+      FILTER.customTo = parseLocalDt(toInput.value);
+      rerender();
+    });
+  }
   document.getElementById("chip-reset").addEventListener("click", () => {
     FILTER.tenant = FILTER.model = FILTER.endpoint = null;
     FILTER.time = "all";
+    FILTER.customFrom = FILTER.customTo = null;
     rerender();
   });
+}
+
+// <input type="datetime-local"> uses "YYYY-MM-DDTHH:mm" in local time,
+// while our timestamps are unix-seconds (UTC). Convert both ways.
+function localDtValue(unixSec) {
+  if (unixSec == null) return "";
+  const d = new Date(unixSec * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function parseLocalDt(str) {
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d.getTime() / 1000;
 }
 
 function updateChips() {
@@ -1627,12 +1696,16 @@ function highlightAll(text, claims) {
   return html;
 }
 
-function parseInput(inp) {
+function parseInput(inp, row) {
+  // `row` is optional and lets us fall back to attributes.system for older
+  // Anthropic traces that pre-date the patch which merges system into messages.
   try {
     const messages = JSON.parse(inp);
-    const sys = messages.find(m => m.role === "system");
-    const usr = messages.find(m => m.role === "user");
-    return { context: sys ? sys.content : "", question: usr ? usr.content : "" };
+    const sys = Array.isArray(messages) ? messages.find(m => m && m.role === "system") : null;
+    const usr = Array.isArray(messages) ? messages.find(m => m && m.role === "user")   : null;
+    const context = sys ? sys.content
+                        : (row && typeof row.system === "string" ? row.system : "");
+    return { context, question: usr ? usr.content : "" };
   } catch (_) {
     return { context: inp || "", question: "" };
   }
@@ -1649,7 +1722,7 @@ function parseInput(inp) {
 
 function perSpanActions(row) {
   const out = [];
-  const ctx = (() => { try { return parseInput(row.input).context || ""; } catch { return ""; } })();
+  const ctx = (() => { try { return parseInput(row.input, row).context || ""; } catch { return ""; } })();
   const outputText = row.output || "";
   const score = row.Hallucination;
 
@@ -1762,7 +1835,7 @@ function renderOffenders(rows) {
   let html = "";
   worst.forEach((r, i) => {
     const tier = tierForScore(r.Hallucination);
-    const { context, question } = parseInput(r.input);
+    const { context, question } = parseInput(r.input, r);
     const claims = r.details && r.details.claims ? r.details.claims : null;
     const answerHtml = claims ? highlightAll(r.output || "", claims) : esc(r.output || "");
     let claimsHtml = "";

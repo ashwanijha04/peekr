@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 from contextvars import ContextVar
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 if TYPE_CHECKING:
     from ..span import Span
@@ -28,10 +28,28 @@ class BaseEvaluator(abc.ABC):
 
 
 class EvalExporter:
-    """Exporter that runs evaluators on LLM spans and stores scores in span.attributes."""
+    """Exporter that runs evaluators on LLM spans and stores scores in span.attributes.
 
-    def __init__(self, evaluators: list[BaseEvaluator]) -> None:
+    Parameters
+    ----------
+    evaluators
+        The list of `BaseEvaluator` instances to run on each LLM span.
+    span_filter
+        Optional callable `(span) -> bool`. When set, evaluators only run on
+        spans for which the filter returns truthy. Useful to scope the LLM-as-
+        judge cost to user-facing calls only, e.g. by checking the endpoint:
+
+            instrument(evaluators=[...],
+                       evaluate_filter=lambda s: s.attributes.get("endpoint") == "/api/qa")
+    """
+
+    def __init__(
+        self,
+        evaluators: list[BaseEvaluator],
+        span_filter: Optional[Callable[["Span"], bool]] = None,
+    ) -> None:
         self.evaluators = evaluators
+        self.span_filter = span_filter
 
     def export(self, span: Span) -> None:
         # Only evaluate LLM spans
@@ -41,6 +59,23 @@ class EvalExporter:
         # Do not recurse into evaluation
         if _in_eval.get():
             return
+
+        # Skip spans explicitly marked as internal (e.g. evaluator judge calls
+        # tagged by the SDK patches via _in_eval). Belt-and-braces with the
+        # ContextVar guard above.
+        if (span.attributes or {}).get("peekr.internal"):
+            return
+
+        # Per-span filter — lets users scope evaluation to a subset of spans
+        # without re-implementing the exporter. See `span_filter` in
+        # `EvalExporter.__init__`.
+        if self.span_filter is not None:
+            try:
+                if not self.span_filter(span):
+                    return
+            except Exception:
+                # A faulty filter should never break tracing.
+                return
 
         token = _in_eval.set(True)
         try:

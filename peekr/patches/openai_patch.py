@@ -79,6 +79,15 @@ def patch_openai():
     def patched_create(*args, **kwargs):
         span, token = start_span("openai.chat.completions")
         span.attributes["model"] = kwargs.get("model", "unknown")
+        # Mark spans created while inside an evaluator (LLM-as-judge) so the
+        # dashboard / aggregations can filter them out. They're still written
+        # to JSONL so users can audit judge costs if they want.
+        try:
+            from ..eval import _in_eval as _peekr_in_eval
+            if _peekr_in_eval.get():
+                span.attributes["peekr.internal"] = True
+        except Exception:  # pragma: no cover — eval may not be importable in trim builds
+            pass
 
         messages = kwargs.get("messages", [])
         if messages:

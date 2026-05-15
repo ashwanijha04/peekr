@@ -83,15 +83,33 @@ def patch_anthropic():
     def patched_create(self, *args, **kwargs):
         span, token = start_span("anthropic.messages")
         span.attributes["model"] = kwargs.get("model", "unknown")
+        # Tag judge-LLM spans so the dashboard can hide them. The recursion
+        # guard already stops them from being scored; this stops them from
+        # appearing as duplicate cards in the worst-offenders panel.
+        try:
+            from ..eval import _in_eval as _peekr_in_eval
+            if _peekr_in_eval.get():
+                span.attributes["peekr.internal"] = True
+        except Exception:  # pragma: no cover
+            pass
 
-        messages = kwargs.get("messages", [])
-        if messages:
-            prompt = json.dumps(messages, default=str)
-            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
-
+        messages = kwargs.get("messages", []) or []
         system = kwargs.get("system")
+
+        # Merge system into the messages array under role="system" so consumers
+        # written for the OpenAI/chat shape (peekr dashboard, evaluators using
+        # `attributes.input`) see the system prompt without special-casing the
+        # Anthropic schema. The standalone `attributes.system` is also kept so
+        # SQLite queries that already filter on it keep working.
+        unified_messages: list = list(messages)
         if system:
-            span.attributes["system"] = system[:_TRUNCATE] + "…" if len(system) > _TRUNCATE else system
+            sys_str = system if isinstance(system, str) else json.dumps(system, default=str)
+            unified_messages = [{"role": "system", "content": sys_str}, *unified_messages]
+            span.attributes["system"] = sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+
+        if unified_messages:
+            prompt = json.dumps(unified_messages, default=str)
+            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
 
         is_streaming = kwargs.get("stream", False)
 
