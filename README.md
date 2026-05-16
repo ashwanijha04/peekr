@@ -114,7 +114,7 @@ agent.run  1243ms
 | Tool tracing | `@peekr.trace` on any sync or async function |
 | Sessions | `with peekr.session(user_id="alice", tenant_id="acme"): ...` |
 | Multi-tenant schema | `tenant_id` and `retention_class` first-class on every span |
-| Alerts | `instrument(alerts=[peekr.alert.ErrorRate(0.05)])` |
+| Alerts + Slack/webhook sinks | `ErrorRate(0.05).with_sinks(SlackSink(url), WebhookSink(url))` |
 | LLM-as-judge eval | `instrument(evaluators=[peekr.eval.Rubric("Be concise")])` |
 | Hallucination detection | `instrument(evaluators=[peekr.eval.Hallucination()])` |
 | Claim-level (RAGAS) hallucination | `Hallucination(detailed=True)` — per-claim verdicts |
@@ -372,6 +372,33 @@ sqlite3 traces.db "
   SELECT name, trace_id, json_extract(attributes,'\$.error') AS msg
   FROM spans WHERE status = 'error';"
 ```
+
+### Alert routing — Slack, webhooks, PagerDuty
+
+By default, alert messages go to `stderr`. Attach one or more sinks to route them anywhere:
+
+```python
+import peekr
+from peekr.alert import ErrorRate, CostSpike, LatencyP95, SlackSink, WebhookSink
+
+peekr.instrument(alerts=[
+    ErrorRate(threshold=0.05).with_sinks(
+        SlackSink("https://hooks.slack.com/services/T0/B0/abc"),
+    ),
+    CostSpike(multiplier=3.0).with_sinks(
+        WebhookSink(
+            "https://events.pagerduty.com/v2/enqueue",
+            payload_builder=lambda name, msg: {
+                "routing_key": "your-key",
+                "event_action": "trigger",
+                "payload": {"summary": msg, "source": "peekr", "severity": "warning"},
+            },
+        ),
+    ),
+])
+```
+
+Sinks are best-effort — network failures, timeouts, and exceptions inside `notify()` are swallowed silently so a flaky webhook never breaks the application's tracing path. Use `WebhookSink(payload_builder=...)` to fit any incident system (PagerDuty Events v2, Opsgenie, OpsLevel, custom routers).
 
 ### OpenTelemetry export
 
