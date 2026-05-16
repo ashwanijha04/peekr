@@ -15,6 +15,7 @@ from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
+from .patches.gemini_patch import patch_gemini
 from .patches.langchain_patch import patch_langchain
 from .patches.llamaindex_patch import patch_llamaindex
 from .patches.crewai_patch import patch_crewai
@@ -87,6 +88,7 @@ def instrument(
         patch_openai()
         patch_anthropic()
         patch_bedrock()
+        patch_gemini()
         patch_langchain()
         patch_llamaindex()
         patch_crewai()
