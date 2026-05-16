@@ -34,6 +34,8 @@ def instrument(
     evaluate_filter=None,
     tenant_id: str | None = None,
     retention_class: str | None = None,
+    sample_rate: float | None = None,
+    keep_errors: bool | None = None,
 ):
     """
     Auto-instrument LLM SDKs (OpenAI, Anthropic, Bedrock) and agent
@@ -53,10 +55,24 @@ def instrument(
     retention_class     → process-wide default retention tier.
                           Recommended: "default" | "short" | "long" | "pii".
                           Falls back to env PEEKR_RETENTION_CLASS.
+
+    sample_rate         → fraction of root traces to persist, 0.0–1.0
+                          (default 1.0 = keep everything). Decision is made
+                          at root-span creation and inherited by all children,
+                          so traces are never partially captured.
+                          Evaluators and alerts still see every span — only
+                          storage exporters respect sampling.
+    keep_errors         → if True (default), errored spans are always
+                          persisted even when their trace was sampled out.
     """
     global _patched
 
-    set_process_defaults(tenant_id=tenant_id, retention_class=retention_class)
+    set_process_defaults(
+        tenant_id=tenant_id,
+        retention_class=retention_class,
+        sample_rate=sample_rate,
+        keep_errors=keep_errors,
+    )
 
     # Order matters. Exporters run in the order they're registered, on the
     # SAME span object. EvalExporter and AlertExporter mutate span.attributes

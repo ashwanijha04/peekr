@@ -93,6 +93,7 @@ class OTelExporter:
     service_name:
         Resource attribute. Defaults to ``"peekr"``.
     """
+    _is_storage = True  # subject to sampling — see context.should_persist
 
     def __init__(
         self,

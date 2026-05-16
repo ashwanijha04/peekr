@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import random
 import uuid
 from contextvars import ContextVar
 from typing import Optional
@@ -9,21 +10,48 @@ from .span import Span
 _current_span: ContextVar[Optional[Span]] = ContextVar("current_span", default=None)
 _current_trace_id: ContextVar[Optional[str]] = ContextVar("current_trace_id", default=None)
 
+# Sampling decision propagates from the root span through children via
+# ContextVar (it follows the async task tree). A value of None means
+# "not yet decided" — the next root span will decide.
+_trace_sample_keep: ContextVar[Optional[bool]] = ContextVar("trace_sample_keep", default=None)
+
 # Process-wide defaults set by instrument(). Lower priority than session() context.
 _default_tenant_id: Optional[str] = None
 _default_retention_class: Optional[str] = None
+_sample_rate: float = 1.0       # fraction of root traces to keep
+_keep_errors: bool = True       # always persist errored spans, even when trace dropped
 
 
 def set_process_defaults(
     tenant_id: Optional[str] = None,
     retention_class: Optional[str] = None,
+    sample_rate: Optional[float] = None,
+    keep_errors: Optional[bool] = None,
 ) -> None:
-    """Called by instrument() to set process-wide identity/retention fallbacks."""
-    global _default_tenant_id, _default_retention_class
+    """Called by instrument() to set process-wide defaults."""
+    global _default_tenant_id, _default_retention_class, _sample_rate, _keep_errors
     if tenant_id is not None:
         _default_tenant_id = tenant_id
     if retention_class is not None:
         _default_retention_class = retention_class
+    if sample_rate is not None:
+        if not 0.0 <= sample_rate <= 1.0:
+            raise ValueError("sample_rate must be between 0.0 and 1.0")
+        _sample_rate = sample_rate
+    if keep_errors is not None:
+        _keep_errors = keep_errors
+
+
+def should_persist(span: Span) -> bool:
+    """Storage exporters call this to decide whether to write a span.
+
+    Returns True if (a) the trace was sampled in, or (b) keep_errors is on
+    and this particular span is an error. Returns False to drop.
+    """
+    keep = _trace_sample_keep.get()
+    if keep is None or keep:
+        return True
+    return _keep_errors and span.status == "error"
 
 
 def get_current_span() -> Optional[Span]:
@@ -60,6 +88,10 @@ def _resolve_retention_class() -> Optional[str]:
 def start_span(name: str) -> tuple[Span, object]:
     trace_id = get_or_create_trace_id()
     parent = get_current_span()
+    # Root span: make the sampling decision once for the whole trace.
+    # Children inherit through the ContextVar.
+    if parent is None and _trace_sample_keep.get() is None:
+        _trace_sample_keep.set(random.random() < _sample_rate)
     span = Span(
         name=name,
         trace_id=trace_id,

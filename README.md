@@ -124,6 +124,7 @@ agent.run  1243ms
 | Trace replay | `peekr replay <trace_id>` |
 | TypeScript SDK | `npm install @peekr/sdk` — same wire format |
 | OpenTelemetry export | `add_exporter(peekr.OTelExporter())` — OpenInference-shaped spans into any OTel pipeline |
+| Sampling | `instrument(sample_rate=0.1)` — whole-trace decision; errored spans always kept |
 
 ### Failure modes peekr catches that timing alone won't
 
@@ -399,6 +400,19 @@ peekr.instrument(alerts=[
 ```
 
 Sinks are best-effort — network failures, timeouts, and exceptions inside `notify()` are swallowed silently so a flaky webhook never breaks the application's tracing path. Use `WebhookSink(payload_builder=...)` to fit any incident system (PagerDuty Events v2, Opsgenie, OpsLevel, custom routers).
+
+### Sampling
+
+High-traffic agents produce a lot of spans. `sample_rate` drops a fraction of traces from storage while keeping evaluators and alerts running on the full stream — so your error rate, hallucination score, and cost figures stay accurate.
+
+```python
+peekr.instrument(
+    sample_rate=0.1,        # keep 10% of traces; default 1.0
+    keep_errors=True,       # errored spans always persisted (default)
+)
+```
+
+The decision is made once per trace at root-span creation and inherited by every child, so a trace is never partially captured — you don't get orphan `openai.chat.completions` spans without their parent.
 
 ### OpenTelemetry export
 

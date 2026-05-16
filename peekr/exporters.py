@@ -6,6 +6,12 @@ from .span import Span
 
 
 class JSONLExporter:
+    # Storage exporters are subject to sampling — see context.should_persist.
+    # Mutating exporters (EvalExporter, AlertExporter) do NOT set this flag,
+    # so they always run on every span (evaluators score the full trace;
+    # alerts compute on the true error rate).
+    _is_storage = True
+
     def __init__(self, path: str = "traces.jsonl"):
         self.path = path
 
@@ -15,6 +21,8 @@ class JSONLExporter:
 
 
 class ConsoleExporter:
+    _is_storage = True
+
     def export(self, span: Span) -> None:
         duration = f"{span.duration_ms:.1f}ms" if span.duration_ms else "?"
         indent = "  " if span.parent_id else ""
@@ -27,6 +35,8 @@ class ConsoleExporter:
 
 
 class SQLiteExporter:
+    _is_storage = True
+
     def __init__(self, path: str = "traces.db"):
         self.path = path
         self._lock = threading.Lock()
@@ -127,6 +137,7 @@ class HTTPExporter:
     misconfigured pipeline fails loudly rather than silently dropping spans.
     Get on the waitlist: https://github.com/ashwanijha04/peekr/discussions
     """
+    _is_storage = True
 
     def __init__(
         self,
@@ -163,5 +174,15 @@ def add_exporter(exporter) -> None:
 
 
 def export_span(span: Span) -> None:
+    # Mutators (EvalExporter, AlertExporter) always run — they need every
+    # span to compute correct eval scores and alert rates. Storage exporters
+    # respect sampling via the _is_storage marker.
+    keep = None  # resolved lazily; avoids importing context for no-sampling case
     for exporter in _exporters:
+        if getattr(exporter, "_is_storage", False):
+            if keep is None:
+                from .context import should_persist
+                keep = should_persist(span)
+            if not keep:
+                continue
         exporter.export(span)
