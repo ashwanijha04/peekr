@@ -2,6 +2,7 @@ from __future__ import annotations
 from .exporters import (
     add_exporter, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
 )
+from .otel import OTelExporter
 from .context import (
     start_span, end_span, get_current_span, set_process_defaults,
 )
@@ -14,6 +15,7 @@ from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
+from .patches.gemini_patch import patch_gemini
 from .patches.langchain_patch import patch_langchain
 from .patches.llamaindex_patch import patch_llamaindex
 from .patches.crewai_patch import patch_crewai
@@ -86,6 +88,7 @@ def instrument(
         patch_openai()
         patch_anthropic()
         patch_bedrock()
+        patch_gemini()
         patch_langchain()
         patch_llamaindex()
         patch_crewai()
@@ -98,6 +101,7 @@ __all__ = [
     "start_span", "end_span", "get_current_span",
     # exporters
     "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter", "add_exporter",
+    "OTelExporter",
     # features
     "feedback", "export_feedback",
     "experiment",
