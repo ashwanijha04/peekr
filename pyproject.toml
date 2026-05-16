@@ -18,6 +18,11 @@ bedrock = ["boto3>=1.28"]
 langchain = ["langchain-core>=0.1.0"]
 llamaindex = ["llama-index-core>=0.10.0"]
 crewai = ["crewai>=0.30.0"]
+otel = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
 all = [
     "openai>=1.0",
     "anthropic>=0.20",
@@ -25,8 +30,11 @@ all = [
     "langchain-core>=0.1.0",
     "llama-index-core>=0.10.0",
     "crewai>=0.30.0",
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
 ]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
 
 [project.urls]
 Homepage = "https://ashwanijha04.github.io/peekr"
