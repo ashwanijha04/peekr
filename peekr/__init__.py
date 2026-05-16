@@ -2,6 +2,7 @@ from __future__ import annotations
 from .exporters import (
     add_exporter, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
 )
+from .otel import OTelExporter
 from .context import (
     start_span, end_span, get_current_span, set_process_defaults,
 )
@@ -100,6 +101,7 @@ __all__ = [
     "start_span", "end_span", "get_current_span",
     # exporters
     "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter", "add_exporter",
+    "OTelExporter",
     # features
     "feedback", "export_feedback",
     "experiment",

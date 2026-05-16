@@ -55,6 +55,7 @@ pip install "peekr[gemini]"         # with Google Gemini
 pip install "peekr[langchain]"      # with LangChain / LangGraph
 pip install "peekr[llamaindex]"     # with LlamaIndex
 pip install "peekr[crewai]"         # with CrewAI
+pip install "peekr[otel]"           # with OpenTelemetry / OpenInference export
 pip install "peekr[all]"            # everything
 ```
 
@@ -122,6 +123,7 @@ agent.run  1243ms
 | A/B experiments | `@peekr.experiment(variants=["control", "test"])` |
 | Trace replay | `peekr replay <trace_id>` |
 | TypeScript SDK | `npm install @peekr/sdk` — same wire format |
+| OpenTelemetry export | `add_exporter(peekr.OTelExporter())` — OpenInference-shaped spans into any OTel pipeline |
 
 ### Failure modes peekr catches that timing alone won't
 
@@ -370,6 +372,26 @@ sqlite3 traces.db "
   SELECT name, trace_id, json_extract(attributes,'\$.error') AS msg
   FROM spans WHERE status = 'error';"
 ```
+
+### OpenTelemetry export
+
+Ship peekr spans into any OTel-compatible backend (Datadog, Honeycomb, Grafana Tempo, Arize Phoenix, Langfuse-OTel, etc.) by translating attributes into the [OpenInference semantic conventions](https://github.com/Arize-ai/openinference) the LLM observability ecosystem uses.
+
+```bash
+pip install "peekr[otel]"
+```
+
+```python
+import peekr
+from peekr.exporters import add_exporter
+
+peekr.instrument()
+add_exporter(peekr.OTelExporter())                    # uses your app's existing OTel setup
+add_exporter(peekr.OTelExporter(endpoint="https://api.honeycomb.io",
+                                headers={"x-honeycomb-team": "..."}))   # or configure inline
+```
+
+No agent, no collector, no separate process. Peekr writes OpenInference-shaped spans in-process, and any OTel pipeline you already operate consumes them.
 
 ### Custom exporters
 
