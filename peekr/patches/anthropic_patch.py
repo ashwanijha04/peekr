@@ -73,12 +73,23 @@ class _AnthropicStreamWrapper:
 
 
 def patch_anthropic():
+    # `import anthropic` alone does not always populate the
+    # `anthropic.resources` attribute — Python only resolves submodules
+    # as attributes once they have been imported. Some test environments
+    # (notably ones where `anthropic` is mocked or only partially imported)
+    # then crash with AttributeError on the dotted-path lookup. Force the
+    # submodule via an explicit from-import and catch both shapes of
+    # failure so this function never raises — otherwise `_patched` never
+    # gets set and every subsequent `instrument()` retries it.
     try:
-        import anthropic
-    except ImportError:
+        from anthropic.resources.messages import Messages  # type: ignore
+    except (ImportError, AttributeError):
         return
 
-    original_create = anthropic.resources.messages.Messages.create
+    if getattr(Messages.create, "_peekr_patched", False):
+        return  # idempotent — safe to call instrument() multiple times
+
+    original_create = Messages.create
 
     def patched_create(self, *args, **kwargs):
         span, token = start_span("anthropic.messages")
@@ -138,4 +149,5 @@ def patch_anthropic():
                 end_span(span, token)
                 export_span(span)
 
-    anthropic.resources.messages.Messages.create = patched_create
+    patched_create._peekr_patched = True  # type: ignore[attr-defined]
+    Messages.create = patched_create
