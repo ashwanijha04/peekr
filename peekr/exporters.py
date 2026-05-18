@@ -1,7 +1,12 @@
 from __future__ import annotations
+import atexit
 import json
 import sqlite3
+import sys
 import threading
+import time
+import urllib.error
+import urllib.request
 from .span import Span
 
 
@@ -119,11 +124,11 @@ class SQLiteExporter:
 class HTTPExporter:
     """Ship spans to a Peekr Cloud (or self-hosted) ingestion endpoint over HTTPS.
 
-    Reserved public surface — implementation lands with Peekr Cloud GA.
-    The constructor signature is stable as of v0.3 so you can wire it in
-    today and the call site won't change when the body is filled in.
+    Buffers spans in memory and POSTs them in batches on a background daemon
+    thread. A flush happens whenever the buffer reaches `batch_size`, or every
+    `flush_interval_seconds`, or at interpreter exit (registered via atexit).
 
-    Usage (works once Peekr Cloud is live):
+    Usage:
 
         peekr.instrument(
             tenant_id="acme",
@@ -133,11 +138,13 @@ class HTTPExporter:
             ),
         )
 
-    Until then this class raises NotImplementedError on .export() so a
-    misconfigured pipeline fails loudly rather than silently dropping spans.
-    Get on the waitlist: https://github.com/ashwanijha04/peekr/discussions
+    Failures (timeouts, 429, 5xx) are retried once, then logged and dropped.
+    Spans are upserted server-side on (project_id, span_id), so retries are
+    idempotent and a span re-sent with end_time set will overwrite the open row.
     """
     _is_storage = True
+
+    _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
     def __init__(
         self,
@@ -158,11 +165,88 @@ class HTTPExporter:
         self.flush_interval_seconds = flush_interval_seconds
         self.timeout_seconds = timeout_seconds
 
+        self._queue: list[dict] = []
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._flush_thread: threading.Thread | None = None
+        self._started = False
+
     def export(self, span: Span) -> None:
-        raise NotImplementedError(
-            "HTTPExporter ships with Peekr Cloud (Phase 1). "
-            "Use JSONLExporter or SQLiteExporter today; "
-            "see https://github.com/ashwanijha04/peekr/discussions for the waitlist."
+        if not self._started:
+            self._start()
+        batch: list[dict] | None = None
+        with self._lock:
+            self._queue.append(span.to_dict())
+            if len(self._queue) >= self.batch_size:
+                batch, self._queue = self._queue, []
+        if batch is not None:
+            self._post(batch)
+
+    def shutdown(self) -> None:
+        """Flush any buffered spans and stop the background thread.
+        Called automatically at interpreter exit; safe to call manually."""
+        self._stop_event.set()
+        self._flush_pending()
+        if self._flush_thread is not None and self._flush_thread.is_alive():
+            self._flush_thread.join(timeout=self.timeout_seconds + 1.0)
+
+    def _start(self) -> None:
+        with self._lock:
+            if self._started:
+                return
+            self._started = True
+        self._flush_thread = threading.Thread(
+            target=self._flusher_loop,
+            name="peekr-http-exporter",
+            daemon=True,
+        )
+        self._flush_thread.start()
+        atexit.register(self.shutdown)
+
+    def _flusher_loop(self) -> None:
+        while not self._stop_event.wait(self.flush_interval_seconds):
+            self._flush_pending()
+
+    def _flush_pending(self) -> None:
+        with self._lock:
+            if not self._queue:
+                return
+            batch, self._queue = self._queue, []
+        self._post(batch)
+
+    def _post(self, batch: list[dict], attempt: int = 0) -> None:
+        body = json.dumps({"spans": batch}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.endpoint}/v1/spans",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "peekr-python",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code in self._RETRY_STATUSES and attempt < 1:
+                time.sleep(1.0)
+                self._post(batch, attempt=attempt + 1)
+                return
+            self._log_failure(e.code, e.reason, len(batch))
+        except (urllib.error.URLError, TimeoutError) as e:
+            if attempt < 1:
+                time.sleep(1.0)
+                self._post(batch, attempt=attempt + 1)
+                return
+            self._log_failure(None, str(e), len(batch))
+
+    @staticmethod
+    def _log_failure(code: int | None, reason: str, n: int) -> None:
+        code_str = code if code is not None else "network"
+        sys.stderr.write(
+            f"[peekr] HTTPExporter: dropped {n} spans ({code_str}: {reason})\n"
         )
 
 

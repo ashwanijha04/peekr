@@ -161,9 +161,8 @@ class TestPersistence:
         assert all(r["tenant_id"] == "acme" for r in rows)
 
     def test_http_exporter_signature_is_stable(self):
-        """Reserved public surface for Peekr Cloud — must accept the
-        documented kwargs and reject missing required ones, even though
-        .export() raises NotImplementedError until cloud GA."""
+        """Constructor surface for Peekr Cloud — accepts documented kwargs,
+        rejects missing required ones, strips trailing slash from endpoint."""
         exp = HTTPExporter(
             endpoint="https://ingest.peekr.cloud",
             api_key="pk_live_test",
@@ -185,13 +184,6 @@ class TestPersistence:
             HTTPExporter(endpoint="", api_key="k")
         with pytest.raises(ValueError):
             HTTPExporter(endpoint="https://x", api_key="")
-
-        # Until Cloud GA, .export() must fail loudly so misconfigured
-        # pipelines don't silently drop spans.
-        s = Span(name="x", trace_id="t")
-        s.finish()
-        with pytest.raises(NotImplementedError):
-            exp.export(s)
 
     def test_sqlite_migrates_existing_db_additively(self, tmp_path):
         """Pre-v1 DBs without the new columns must migrate cleanly without losing data."""
