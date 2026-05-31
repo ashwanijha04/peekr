@@ -13,6 +13,7 @@ from .experiment import experiment
 from .alerts import alert
 from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from . import guard
+from . import prompts
 from .middleware import FastAPIMiddleware, PeekrASGIMiddleware  # noqa: F401
 from .harnesses.rag import instrument_rag
 from .patches.openai_patch import patch_openai

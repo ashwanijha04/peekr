@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "peekr"
-version = "0.6.2"
+version = "0.7.0"
 description = "Zero-config observability for AI agents"
 readme = "README.md"
 license = { text = "MIT" }
