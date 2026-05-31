@@ -63,12 +63,26 @@ pip install "peekr[all]"            # everything
 
 ## Quick start
 
-**1. Instrument once at startup.** Patches OpenAI, Anthropic, Bedrock, and any installed agent framework.
+**1. Instrument once at startup** — before any other application imports.
 
 ```python
+# entrypoint.py  (FastAPI main.py, Django settings, script top-level, etc.)
+from dotenv import load_dotenv
+load_dotenv()
+
 import peekr
-peekr.instrument()
+peekr.instrument()   # ← must come before any import that touches an LLM SDK
+
+# your application imports follow here
+from myapp.routes import answer, recall
 ```
+
+> **Call order matters.** peekr patches at the class level, so every
+> `OpenAI()` / `AsyncOpenAI()` / `anthropic.Anthropic()` / `boto3.client()`
+> instance is covered — even ones created before `instrument()` is called,
+> because Python resolves methods on the class at call time.
+> The one exception is `@lru_cache` or module-level singletons created
+> *before* the patch runs. Calling `instrument()` first avoids this entirely.
 
 **2. Trace your tools** so they appear in the same tree as LLM calls.
 

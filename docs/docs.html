@@ -277,7 +277,29 @@ messages = conversation_history  <span class="cm"># gets longer every turn</span
 
     <!-- API REFERENCE -->
     <h2 id="instrument">instrument()</h2>
-    <p>Call once, before any LLM calls. Patches the OpenAI and Anthropic SDKs.</p>
+    <p>Call once at startup — before any LLM SDK imports or client instantiation. Patches OpenAI (sync + async, chat + embeddings), Anthropic, AWS Bedrock, and Google Gemini at the class level so every client instance is covered automatically.</p>
+
+    <div class="callout"><strong>Call order matters.</strong> <code>peekr.instrument()</code> must run before any LLM client is imported or created. The safest place is immediately after <code>load_dotenv()</code> / env setup, before any other application imports:
+
+<pre style="margin-top:0.75rem"><code><span class="cm"># ✓ correct — instrument before importing anything that touches an LLM SDK</span>
+<span class="kw">from</span> dotenv <span class="kw">import</span> load_dotenv
+load_dotenv()
+
+<span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>(...)   <span class="cm"># ← before everything else</span>
+
+<span class="kw">from</span> myapp.routes <span class="kw">import</span> answer, recall   <span class="cm"># ← these import openai, anthropic, etc.</span>
+<span class="kw">from</span> myapp.llm <span class="kw">import</span> client               <span class="cm"># ← also fine — patched at class level</span></code></pre>
+
+<pre style="margin-top:0.75rem"><code><span class="cm"># ✗ wrong — openai is imported and a client created before instrument() runs</span>
+<span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+client = OpenAI()          <span class="cm"># module-level singleton, already created</span>
+
+<span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>(...)   <span class="cm"># too late for this specific instance if lru_cache is used</span></code></pre>
+
+<strong>Why?</strong> peekr patches at the <em>class</em> level, so new instances created after <code>instrument()</code> are always captured. Pre-existing instances also work because Python resolves methods on the class at call time — not at instantiation. The one exception is <code>@lru_cache</code> or module-level singletons whose internal state bypasses the patched method: calling <code>instrument()</code> first avoids this entirely.
+    </div>
     <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
     console=<span class="kw">True</span>,                <span class="cm"># print spans live (default: True)</span>
     storage=<span class="st">"jsonl"</span>,             <span class="cm"># "jsonl" | "sqlite" | "both"</span>
