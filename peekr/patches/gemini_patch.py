@@ -103,6 +103,51 @@ class _GeminiStreamWrapper:
             export_span(self._span)
 
 
+def _wrap_async_generate(original, *, is_method: bool, name: str):
+    async def patched(*args, **kwargs):
+        span, token = start_span(name)
+        if is_method:
+            self = args[0]
+            call_args = args[1:]
+            model = kwargs.get("model") or getattr(self, "model_name", "unknown")
+        else:
+            self = None
+            call_args = args
+            model = kwargs.get("model") or (call_args[0] if call_args else "unknown")
+        span.attributes["model"] = model
+
+        contents = kwargs.get("contents")
+        if contents is None and call_args:
+            for arg in call_args:
+                if isinstance(arg, (str, list, dict)):
+                    contents = arg
+                    break
+        if contents is not None:
+            span.attributes["input"] = _serialize_contents(contents)
+
+        try:
+            result = await original(*args, **kwargs)
+            usage = _extract_usage(result)
+            if usage:
+                span.attributes.update(usage)
+            output = _extract_text(result)
+            if output:
+                span.attributes["output"] = (
+                    output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                )
+            span.status = "ok"
+            return result
+        except Exception as exc:
+            span.status = "error"
+            span.attributes["error"] = str(exc)
+            raise
+        finally:
+            end_span(span, token)
+            export_span(span)
+
+    return patched
+
+
 def _wrap_generate(original, *, is_method: bool, name: str):
     def patched(*args, **kwargs):
         span, token = start_span(name)
@@ -165,29 +210,36 @@ def patch_gemini() -> None:
     _patch_google_generativeai()
 
 
+def _patch_method(cls, method_name: str, wrapper_fn, name: str) -> None:
+    if not hasattr(cls, method_name):
+        return
+    if getattr(getattr(cls, method_name), "_peekr_patched", False):
+        return
+    original = getattr(cls, method_name)
+    wrapped = wrapper_fn(original, is_method=True, name=name)
+    wrapped._peekr_patched = True  # type: ignore[attr-defined]
+    setattr(cls, method_name, wrapped)
+
+
 def _patch_google_genai() -> None:
     try:
         from google.genai import models as _models_mod  # type: ignore
     except Exception:
         return
 
+    # ── sync Models ────────────────────────────────────────────────────────
     Models = getattr(_models_mod, "Models", None)
-    if Models is None:
-        return
+    if Models is not None:
+        _patch_method(Models, "generate_content",        _wrap_generate, "gemini.generate_content")
+        _patch_method(Models, "generate_content_stream", _wrap_generate, "gemini.generate_content_stream")
+        _patch_method(Models, "embed_content",           _wrap_generate, "gemini.embed_content")
 
-    if not getattr(Models.generate_content, "_peekr_patched", False):
-        original = Models.generate_content
-        wrapped = _wrap_generate(original, is_method=True, name="gemini.generate_content")
-        wrapped._peekr_patched = True  # type: ignore[attr-defined]
-        Models.generate_content = wrapped
-
-    if hasattr(Models, "generate_content_stream") and not getattr(
-        Models.generate_content_stream, "_peekr_patched", False
-    ):
-        original = Models.generate_content_stream
-        wrapped = _wrap_generate(original, is_method=True, name="gemini.generate_content_stream")
-        wrapped._peekr_patched = True  # type: ignore[attr-defined]
-        Models.generate_content_stream = wrapped
+    # ── async AsyncModels ──────────────────────────────────────────────────
+    AsyncModels = getattr(_models_mod, "AsyncModels", None)
+    if AsyncModels is not None:
+        _patch_method(AsyncModels, "generate_content",        _wrap_async_generate, "gemini.generate_content")
+        _patch_method(AsyncModels, "generate_content_stream", _wrap_async_generate, "gemini.generate_content_stream")
+        _patch_method(AsyncModels, "embed_content",           _wrap_async_generate, "gemini.embed_content")
 
 
 def _patch_google_generativeai() -> None:
