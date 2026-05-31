@@ -127,6 +127,16 @@
       <a href="#guardrails">Guardrails</a>
       <a href="#trace-naming">Trace naming</a>
       <a href="#compliance">Compliance (Cloud)</a>
+      <a href="#compliance-fdcpa" style="padding-left:12px;font-size:0.8em">FDCPA · Debt collection</a>
+      <a href="#compliance-hipaa" style="padding-left:12px;font-size:0.8em">HIPAA · Healthcare</a>
+      <a href="#compliance-finra" style="padding-left:12px;font-size:0.8em">FINRA · Financial advice</a>
+      <a href="#compliance-fair-housing" style="padding-left:12px;font-size:0.8em">Fair Housing · Real estate</a>
+      <a href="#compliance-eeoc" style="padding-left:12px;font-size:0.8em">EEOC / ADA · Employment</a>
+      <a href="#compliance-upl" style="padding-left:12px;font-size:0.8em">UPL · Legal</a>
+      <a href="#compliance-tcpa" style="padding-left:12px;font-size:0.8em">TCPA · Voice & messaging</a>
+      <a href="#compliance-gdpr" style="padding-left:12px;font-size:0.8em">GDPR · Automated decisions</a>
+      <a href="#compliance-eu-ai-act" style="padding-left:12px;font-size:0.8em">EU AI Act · Chatbot identity</a>
+      <a href="#compliance-banking" style="padding-left:12px;font-size:0.8em">TILA/ECOA · Banking</a>
       <a href="#peekr-cloud">Peekr Cloud</a>
     </div>
     <div class="sidebar-section">
@@ -1061,6 +1071,154 @@ peekr.<span class="fn">instrument</span>(
       </tbody>
     </table>
     <p>Enable packs in the dashboard under <strong>Compliance</strong>. Each pack can be set to <code>raise</code> (block the response) or <code>warn</code> (record violation, allow through).</p>
+
+    <h3 id="compliance-fdcpa">FDCPA — Debt Collection</h3>
+    <p><em>Fair Debt Collection Practices Act + CFPB Regulation F. Required for any AI agent that communicates with debtors.</em></p>
+    <p><strong>Prohibited outputs (regex-matched):</strong></p>
+    <ul>
+      <li><code>we (will|are going to) (sue|arrest) you</code> — false threat of legal action or arrest (§1692e)</li>
+      <li><code>we can (waive|remove|forgive) (the|this) (fee|debt|balance)</code> — unauthorized fee modification (§1692f)</li>
+      <li><code>(government|federal|official) (agency|collector)</code> — misrepresentation as government entity (§1692e)</li>
+      <li><code>(legal action|lawsuit|court) (has been|is) (filed|initiated)</code> — false claim of legal action</li>
+      <li>Abusive language: <code>stupid|idiot|deadbeat|loser</code> (§1692d)</li>
+    </ul>
+    <p><strong>Required disclosures (must appear in every response):</strong></p>
+    <ul>
+      <li>Initial contact: <code>This is an attempt to collect a debt. Any information obtained will be used for that purpose.</code></li>
+      <li>All subsequent contacts: <code>This communication is from a debt collector.</code></li>
+    </ul>
+    <p><strong>Example violation →</strong> User asks "Can you waive my $50 late fee?" AI replies "I can remove that fee for you." → blocked by <code>we can (waive|remove) .* fee</code> + missing mini-Miranda.</p>
+    <p><strong>Severity:</strong> Civil $1,000/violation + attorneys fees. Criminal up to $5,000 + 1 year imprisonment for willful violations.</p>
+
+    <h3 id="compliance-hipaa">HIPAA — Healthcare</h3>
+    <p><em>HIPAA Privacy Rule (45 CFR § 164) + FDA 21 CFR. Required for any AI agent accessing or communicating protected health information.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>(diagnosed with|you have|patient has).*(cancer|HIV|diabetes|depression)</code> — stating diagnosis as fact</li>
+      <li><code>this (app|tool|assistant) (can|will) (diagnose|treat|cure)</code> — prohibited medical device claim</li>
+      <li><code>(prescribe|recommend you take).*(mg|dose|medication)</code> — AI prescribing medication</li>
+      <li><code>\d{3}-\d{2}-\d{4}</code> — SSN in output (automatic PHI violation)</li>
+      <li><code>FDA[- ]approved.*(this|our)</code> — false clearance claim</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This is not a diagnosis or medical advice.</code></li>
+      <li><code>Consult a licensed healthcare provider.</code></li>
+    </ul>
+    <p><strong>Example violation →</strong> AI says "Based on your symptoms, you have Type 2 diabetes and should take metformin 500mg." → diagnosis + prescribing blocked.</p>
+    <p><strong>Severity:</strong> Civil $100–$50,000/violation. Criminal up to $250,000 + 10 years imprisonment.</p>
+
+    <h3 id="compliance-finra">FINRA / SEC Reg BI — Financial Advice</h3>
+    <p><em>FINRA Rule 2111 + SEC Regulation Best Interest. Required for financial advice AI agents serving retail clients.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>you should (buy|sell|hold|invest in).*(stock|fund|ETF|bond|crypto)</code> — specific recommendation without suitability</li>
+      <li><code>(guaranteed|risk-free|no-risk) (return|investment|profit)</code> — guaranteed returns</li>
+      <li><code>(will|going to) (go up|increase|return) \d+%</code> — performance prediction</li>
+      <li><code>best investment for (you|everyone)</code> — blanket suitability claim</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This is general information only and not personalized investment advice.</code></li>
+      <li><code>Investment recommendations require a suitability assessment.</code></li>
+    </ul>
+    <p><strong>Example violation →</strong> AI says "You should buy NVIDIA stock, it's guaranteed to go up 20% this year." → specific recommendation + guaranteed return both blocked.</p>
+    <p><strong>Severity:</strong> FINRA censure/suspension/bar. SEC civil penalties up to $1M/violation. Criminal: securities fraud up to 20 years.</p>
+
+    <h3 id="compliance-fair-housing">Fair Housing Act — Real Estate</h3>
+    <p><em>Fair Housing Act (42 U.S.C. § 3604) + RESPA. Required for property search, rental, and mortgage AI agents.</em></p>
+    <p><strong>Prohibited outputs (demographic steering):</strong></p>
+    <ul>
+      <li><code>(perfect|great|ideal) for (young professionals|families|singles|retirees)</code> — demographic steering</li>
+      <li><code>(good|safe|nice|quiet) (neighborhood|area|community)</code> — coded language for racial composition</li>
+      <li><code>(changing|transitional|up-and-coming) (neighborhood|area)</code> — coded steering language</li>
+      <li><code>(close to|near) (churches|temples|mosques)</code> — religious group steering</li>
+      <li><code>you (would|might) (prefer|fit in) better in</code> — explicit demographic steering</li>
+    </ul>
+    <p><strong>Required disclosure:</strong> <code>Equal Housing Opportunity.</code></p>
+    <p><strong>Example violation →</strong> AI says "This neighborhood is perfect for young families and has great schools." → demographic steering blocked.</p>
+    <p><strong>Severity:</strong> Civil up to $70,000/violation + unlimited punitive. Criminal up to $1M + 1 year.</p>
+
+    <h3 id="compliance-eeoc">EEOC / ADA — Employment & HR</h3>
+    <p><em>ADA + GINA + Title VII. Blocks prohibited pre-employment questions from HR and recruiting AI agents.</em></p>
+    <p><strong>Prohibited inputs (checked pre-call — the LLM never receives these):</strong></p>
+    <ul>
+      <li><code>do you have (a|an) (disability|impairment|medical condition)</code> — pre-offer disability inquiry (ADA)</li>
+      <li><code>what medications? (are you|do you) (taking|use)</code> — medical inquiry (ADA)</li>
+      <li><code>(family (medical )?history|genetic|hereditary)</code> — genetic information (GINA)</li>
+      <li><code>are you (pregnant|planning to (get pregnant|have children))</code> — pregnancy inquiry (Title VII/PWFA)</li>
+      <li><code>(how old are you|what year were you born)</code> — age inquiry (ADEA)</li>
+    </ul>
+    <p><strong>Required disclosure:</strong> <code>We are an equal opportunity employer.</code></p>
+    <p><strong>Example violation →</strong> Interview bot asks "Do you have any disabilities we should know about?" → blocked pre-call, LLM never invoked, no API cost.</p>
+    <p><strong>Severity:</strong> EEOC compensatory + punitive up to $300,000. Pattern/practice: unlimited.</p>
+
+    <h3 id="compliance-upl">UPL — Unauthorized Practice of Law</h3>
+    <p><em>State bar rules (ABA Model Rule 5.5). Prevents legal AI assistants from providing specific legal advice.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>you should (file|sue|countersue|appeal|plead)</code> — specific legal strategy</li>
+      <li><code>(your case|you) (will|should) (win|prevail|succeed)</code> — outcome prediction</li>
+      <li><code>(you have|you don't have) (a valid claim|grounds|standing)</code> — legal standing opinion</li>
+      <li><code>(sign|don't sign) (this|the) (contract|agreement)</code> — advice on specific document</li>
+      <li><code>(you are|you're) (liable|not liable|guilty|not guilty)</code> — legal liability conclusion</li>
+      <li><code>I am (acting as|serving as) your (attorney|lawyer)</code> — false attorney claim</li>
+    </ul>
+    <p><strong>Required disclosures:</strong> <code>This is not legal advice.</code> and <code>Consult a licensed attorney.</code></p>
+    <p><strong>Severity:</strong> Criminal misdemeanor to felony by state. Unlimited civil liability for damages caused by reliance.</p>
+
+    <h3 id="compliance-tcpa">TCPA — Voice AI & Messaging</h3>
+    <p><em>Telephone Consumer Protection Act + FCC 2024 AI Voice Ruling. Required for outbound voice AI and SMS marketing agents.</em></p>
+    <p><strong>Required disclosures (must appear in every interaction):</strong></p>
+    <ul>
+      <li><code>This is an AI</code> — identity disclosure required at call/chat start</li>
+      <li><code>To stop receiving</code> + <code>reply STOP</code> — opt-out mechanism required in marketing messages</li>
+    </ul>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>your previous purchase (means|gives us permission) to (call|text)</code> — misrepresentation of EBR consent</li>
+    </ul>
+    <p><strong>Severity:</strong> $500/call (negligent), $1,500/call (willful). No cap — a 10,000-call campaign = up to $15M exposure. Class actions extremely common.</p>
+
+    <h3 id="compliance-gdpr">GDPR — Automated Decisions (EU)</h3>
+    <p><em>GDPR Art. 22. Required disclosure for any AI making automated decisions with legal or significant effects on EU residents.</em></p>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This decision was made using automated processing.</code></li>
+      <li><code>You have the right to request human review.</code></li>
+    </ul>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>we (keep|store|retain) your data (forever|indefinitely)</code> — retention without defined period</li>
+      <li><code>(your data|this conversation) (is not|isn't|won't be) (stored|saved|logged)</code> — false data minimisation claim</li>
+    </ul>
+    <p><strong>Severity:</strong> Up to €20M or 4% global annual revenue (whichever is higher).</p>
+
+    <h3 id="compliance-eu-ai-act">EU AI Act — Chatbot Identity</h3>
+    <p><em>EU AI Act Art. 50, effective February 2, 2025. All EU-facing chatbots must disclose AI nature. AI-generated synthetic media must be labeled.</em></p>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>You are interacting with an AI</code> — must appear at the start of every interaction</li>
+      <li><code>This content was AI-generated</code> — required on synthetic media</li>
+    </ul>
+    <p><strong>Severity:</strong> Prohibited practices: €35M or 7% global turnover. Chatbot non-compliance: €15M or 3%.</p>
+
+    <h3 id="compliance-banking">TILA / ECOA — Banking & Lending</h3>
+    <p><em>Truth in Lending Act + Equal Credit Opportunity Act + Fair Lending. Required for credit, mortgage, and lending AI agents.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li><code>(guaranteed|definitely|certainly) (approved|qualify) for (a|this) (loan|credit|mortgage)</code> — guaranteed approval before underwriting</li>
+      <li><code>no (credit check|income verification|documentation) required</code> — material omission about underwriting</li>
+      <li><code>(because you are|since you're).*(woman|Black|Hispanic|disabled)</code> — explicit discriminatory lending basis (ECOA)</li>
+      <li><code>(we don't lend|not available).*(neighborhood|zip code|that area)</code> — potential redlining</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>Annual Percentage Rate</code> — must appear in any credit offer</li>
+      <li><code>We do not discriminate on the basis of race</code> — equal credit opportunity statement</li>
+    </ul>
+    <p><strong>Example violation →</strong> AI says "You're definitely approved — no credit check needed!" → guaranteed approval + material omission both blocked.</p>
+    <p><strong>Severity:</strong> TILA criminal $5,000 + 1 year. ECOA $10,000/violation + punitive. Fair lending: DOJ referral, unlimited compensatory.</p>
 
   </main>
 </div>
