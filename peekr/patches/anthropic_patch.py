@@ -151,3 +151,63 @@ def patch_anthropic():
 
     patched_create._peekr_patched = True  # type: ignore[attr-defined]
     Messages.create = patched_create
+
+    # ── AsyncMessages.create ───────────────────────────────────────────────
+    try:
+        from anthropic.resources.messages import AsyncMessages  # type: ignore
+
+        if getattr(AsyncMessages.create, "_peekr_patched", False):
+            return
+
+        original_async_create = AsyncMessages.create
+
+        async def patched_async_create(self, *args, **kwargs):
+            span, token = start_span("anthropic.messages")
+            span.attributes["model"] = kwargs.get("model", "unknown")
+            try:
+                from ..eval import _in_eval as _peekr_in_eval
+                if _peekr_in_eval.get():
+                    span.attributes["peekr.internal"] = True
+            except Exception:
+                pass
+
+            messages = kwargs.get("messages", []) or []
+            system = kwargs.get("system")
+            unified_messages: list = list(messages)
+            if system:
+                sys_str = system if isinstance(system, str) else json.dumps(system, default=str)
+                unified_messages = [{"role": "system", "content": sys_str}, *unified_messages]
+                span.attributes["system"] = sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+            if unified_messages:
+                prompt = json.dumps(unified_messages, default=str)
+                span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+
+            is_streaming = kwargs.get("stream", False)
+            try:
+                result = await original_async_create(self, *args, **kwargs)
+                if is_streaming:
+                    return _AnthropicStreamWrapper(result, span, token)
+                usage = getattr(result, "usage", None)
+                if usage:
+                    span.attributes["tokens_input"]  = usage.input_tokens
+                    span.attributes["tokens_output"] = usage.output_tokens
+                    span.attributes["tokens_total"]  = usage.input_tokens + usage.output_tokens
+                if result.content:
+                    output = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
+                    span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                span.status = "ok"
+                return result
+            except Exception as e:
+                span.status = "error"
+                span.attributes["error"] = str(e)
+                raise
+            finally:
+                if not is_streaming:
+                    end_span(span, token)
+                    export_span(span)
+
+        patched_async_create._peekr_patched = True  # type: ignore[attr-defined]
+        AsyncMessages.create = patched_async_create
+
+    except (ImportError, AttributeError):
+        pass
