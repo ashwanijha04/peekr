@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 
-from ..context import start_span, end_span
+from ..context import start_span, end_span, GuardrailError, _run_input_guards
 from ..exporters import export_span
 
 _TRUNCATE = 1000
@@ -125,6 +125,7 @@ def patch_anthropic():
         is_streaming = kwargs.get("stream", False)
 
         try:
+            _run_input_guards(span)
             result = original_create(self, *args, **kwargs)
 
             if is_streaming:
@@ -140,6 +141,8 @@ def patch_anthropic():
                 span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise
         except Exception as e:
             span.status = "error"
             span.attributes["error"] = str(e)

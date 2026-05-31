@@ -93,9 +93,14 @@ def instrument(
         if console:
             add_exporter(ConsoleExporter())
         # 2) Mutating guardrails FIRST — redact PII before eval sees the text.
+        #    Also register any input-blocking guardrails for pre-call checks.
         if guardrails:
             from .guard import _MutatingGuardrailExporter
+            from .context import register_input_guard
             add_exporter(_MutatingGuardrailExporter(guardrails))
+            for g in guardrails:
+                if getattr(g, "_input_guard", False):
+                    register_input_guard(g)
         # 3) Evaluators — scores written to span.attributes["eval_scores"].
         if evaluators:
             from .eval import EvalExporter

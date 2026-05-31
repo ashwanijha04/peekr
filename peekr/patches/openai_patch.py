@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 
-from ..context import start_span, end_span
+from ..context import start_span, end_span, GuardrailError, _run_input_guards
 from ..exporters import export_span
 
 _TRUNCATE = 1000
@@ -142,6 +142,7 @@ def _make_chat_patch(original):
             opts["include_usage"] = True
             kwargs = {**kwargs, "stream_options": opts}
         try:
+            _run_input_guards(span)
             if bound_self is not None:
                 result = original(bound_self, *bound_args, **kwargs)
             else:
@@ -158,6 +159,8 @@ def _make_chat_patch(original):
                 span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise  # status already set to "blocked" by _run_input_guards
         except Exception as e:
             span.status = "error"
             span.attributes["error"] = str(e)
@@ -184,6 +187,7 @@ def _make_async_chat_patch(original):
             opts["include_usage"] = True
             kwargs = {**kwargs, "stream_options": opts}
         try:
+            _run_input_guards(span)
             result = await original(self_client, *args, **kwargs)
             if is_streaming:
                 return _AsyncOpenAIStreamWrapper(result, span, token)
@@ -197,6 +201,8 @@ def _make_async_chat_patch(original):
                 span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise
         except Exception as e:
             span.status = "error"
             span.attributes["error"] = str(e)

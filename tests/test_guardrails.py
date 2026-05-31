@@ -13,6 +13,11 @@ from peekr.guard import (
     _MutatingGuardrailExporter,
     _BlockingGuardrailExporter,
 )
+from peekr.context import (
+    register_input_guard,
+    clear_input_guards,
+    _run_input_guards,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -277,9 +282,10 @@ class TestBlocklist:
 class TestBlocklistInPipeline:
 
     def test_raise_blocklist_in_blocking_exporter(self):
-        guard = Blocklist(terms=["classified"], action="raise")
+        # output-only Blocklist has _input_guard=False → lives in blocking exporter
+        guard = Blocklist(terms=["classified"], action="raise", fields=("output",))
         exp = _BlockingGuardrailExporter([guard])
-        span = _llm_span(input_text="classified project details")
+        span = _llm_span(output_text="classified project details")
         with pytest.raises(GuardrailError):
             exp.export(span)
 
@@ -452,6 +458,109 @@ class TestBlockingGuardrailExporter:
         exp = _BlockingGuardrailExporter([bad_guard])
         span = _llm_span()
         exp.export(span)  # RuntimeError swallowed, must not propagate
+
+
+# ── Pre-call input guard registry ────────────────────────────────────────────
+
+class TestInputGuardRegistry:
+    """Tests for _run_input_guards and the pre-call hook mechanism."""
+
+    def setup_method(self):
+        clear_input_guards()
+
+    def teardown_method(self):
+        clear_input_guards()
+
+    def test_run_input_guards_raises_on_match(self):
+        guard = Blocklist(terms=["forbidden"], action="raise", fields=("input",))
+        register_input_guard(guard)
+        span = _llm_span(input_text="this is forbidden content")
+        with pytest.raises(GuardrailError):
+            _run_input_guards(span)
+
+    def test_run_input_guards_sets_blocked_status(self):
+        guard = Blocklist(terms=["secret"], action="raise", fields=("input",))
+        register_input_guard(guard)
+        span = _llm_span(input_text="secret key here")
+        with pytest.raises(GuardrailError):
+            _run_input_guards(span)
+        assert span.status == "blocked"
+
+    def test_run_input_guards_passes_clean_input(self):
+        guard = Blocklist(terms=["forbidden"], action="raise", fields=("input",))
+        register_input_guard(guard)
+        span = _llm_span(input_text="totally clean text")
+        _run_input_guards(span)  # must not raise
+        assert span.status != "blocked"
+
+    def test_run_input_guards_swallows_infra_exceptions(self):
+        bad_guard = MagicMock()
+        bad_guard.run.side_effect = RuntimeError("infra crash")
+        register_input_guard(bad_guard)
+        span = _llm_span(input_text="any input")
+        _run_input_guards(span)  # must not raise
+
+    def test_all_guards_run_before_raising(self):
+        g1 = MagicMock()
+        g1.run.side_effect = GuardrailError("first")
+        g2 = MagicMock()
+        g2.run.side_effect = GuardrailError("second")
+        register_input_guard(g1)
+        register_input_guard(g2)
+        span = _llm_span(input_text="x")
+        with pytest.raises(GuardrailError) as exc_info:
+            _run_input_guards(span)
+        assert "first" in str(exc_info.value)
+        g2.run.assert_called_once()  # second guard still ran
+
+    def test_blocklist_input_guard_flag(self):
+        # action="raise" + "input" in fields → _input_guard=True
+        assert Blocklist(terms=["x"], action="raise", fields=("input",))._input_guard is True
+        assert Blocklist(terms=["x"], action="raise", fields=("output",))._input_guard is False
+        assert Blocklist(terms=["x"], action="redact", fields=("input",))._input_guard is False
+        assert Blocklist(terms=["x"], action="warn",   fields=("input",))._input_guard is False
+
+    def test_input_guard_excluded_from_blocking_exporter(self):
+        # Blocklist with _input_guard=True should NOT appear in _BlockingGuardrailExporter
+        input_guard  = Blocklist(terms=["x"], action="raise", fields=("input",))
+        output_guard = Blocklist(terms=["x"], action="raise", fields=("output",))
+        exp = _BlockingGuardrailExporter([input_guard, output_guard])
+        assert input_guard  not in exp.guardrails
+        assert output_guard in exp.guardrails
+
+    def test_pre_call_vs_post_call_separation(self):
+        """Input guard fires pre-call; output guard fires post-call. Distinct phases."""
+        input_guard  = Blocklist(terms=["forbidden"], action="raise", fields=("input",))
+        output_guard = Blocklist(terms=["forbidden"], action="raise", fields=("output",))
+
+        register_input_guard(input_guard)
+        exp = _BlockingGuardrailExporter([input_guard, output_guard])
+
+        # Pre-call: input blocked
+        span_in = _llm_span(input_text="forbidden prompt")
+        with pytest.raises(GuardrailError):
+            _run_input_guards(span_in)
+
+        # Post-call: output blocked (input is clean)
+        span_out = _llm_span(input_text="clean", output_text="forbidden response")
+        with pytest.raises(GuardrailError):
+            exp.export(span_out)
+
+    def test_common_secrets_registered_as_input_guard(self):
+        guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="raise", fields=("input",))
+        register_input_guard(guard)
+        span = _llm_span(input_text="Use API key sk-proj-abcdefghijklmnopqrstuvwxyz1234")
+        with pytest.raises(GuardrailError):
+            _run_input_guards(span)
+
+    def test_violation_recorded_before_span_is_exported(self):
+        guard = Blocklist(terms=["classified"], action="raise", fields=("input",))
+        register_input_guard(guard)
+        span = _llm_span(input_text="classified document")
+        with pytest.raises(GuardrailError):
+            _run_input_guards(span)
+        # Violation is on the span — exporter can persist it
+        assert "guardrail_violations" in span.attributes
 
 
 # ── Integration: both guardrail types together ────────────────────────────────

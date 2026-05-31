@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..context import start_span, end_span
+from ..context import start_span, end_span, GuardrailError, _run_input_guards
 from ..exporters import export_span
 
 _TRUNCATE = 1000
@@ -126,6 +126,7 @@ def _wrap_async_generate(original, *, is_method: bool, name: str):
             span.attributes["input"] = _serialize_contents(contents)
 
         try:
+            _run_input_guards(span)
             result = await original(*args, **kwargs)
             usage = _extract_usage(result)
             if usage:
@@ -137,6 +138,8 @@ def _wrap_async_generate(original, *, is_method: bool, name: str):
                 )
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise
         except Exception as exc:
             span.status = "error"
             span.attributes["error"] = str(exc)
@@ -178,6 +181,7 @@ def _wrap_generate(original, *, is_method: bool, name: str):
         )
 
         try:
+            _run_input_guards(span)
             result = original(*args, **kwargs)
             if is_streaming and hasattr(result, "__iter__"):
                 return _GeminiStreamWrapper(result, span, token)
@@ -192,6 +196,8 @@ def _wrap_generate(original, *, is_method: bool, name: str):
                 )
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise
         except Exception as exc:
             span.status = "error"
             span.attributes["error"] = str(exc)

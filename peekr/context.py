@@ -3,9 +3,73 @@ import os
 import random
 import uuid
 from contextvars import ContextVar
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from .span import Span
+
+if TYPE_CHECKING:
+    pass  # Span already imported above
+
+
+# ── GuardrailError ────────────────────────────────────────────────────────────
+# Defined here (not in guard/) so patches can import it without any risk of
+# circular imports: patches → context is already the established direction.
+
+class GuardrailError(Exception):
+    """Raised by a guardrail to abort an LLM call or block its response.
+
+    When raised by an input guardrail (pre-call), the SDK method never fires.
+    When raised by a blocking guardrail (post-call), the response is discarded.
+    In both cases the span is still exported so violations are auditable.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        guardrail_name: str = "",
+        span: "Span | None" = None,
+    ) -> None:
+        super().__init__(message)
+        self.guardrail_name = guardrail_name
+        self.span = span
+
+
+# ── Input guard registry ──────────────────────────────────────────────────────
+# Guards registered here run BEFORE the LLM API call.  Raising GuardrailError
+# aborts the call entirely — the SDK method is never invoked.
+
+_input_guards: list = []
+
+
+def register_input_guard(guard) -> None:
+    """Register a guardrail to run before every LLM call."""
+    _input_guards.append(guard)
+
+
+def clear_input_guards() -> None:
+    """Remove all registered input guards (used in tests)."""
+    _input_guards.clear()
+
+
+def _run_input_guards(span: "Span") -> None:
+    """Called by patches after input is captured, before the API call.
+
+    Sets ``span.status = "blocked"`` and records the violation on the span
+    before re-raising so the finally block can export an auditable record even
+    though the API call was aborted.
+    """
+    first_error: "GuardrailError | None" = None
+    for guard in _input_guards:
+        try:
+            guard.run(span)
+        except GuardrailError as exc:
+            if first_error is None:
+                first_error = exc
+        except Exception:
+            pass  # infra failure — never abort on it
+    if first_error is not None:
+        span.status = "blocked"
+        raise first_error
 
 _current_span: ContextVar[Optional[Span]] = ContextVar("current_span", default=None)
 _current_trace_id: ContextVar[Optional[str]] = ContextVar("current_trace_id", default=None)

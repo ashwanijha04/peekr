@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 
-from ..context import start_span, end_span
+from ..context import start_span, end_span, GuardrailError, _run_input_guards
 from ..exporters import export_span
 
 _TRUNCATE = 1000
@@ -93,6 +93,7 @@ def patch_bedrock():
             span.attributes["system"] = s[:_TRUNCATE] + "…" if len(s) > _TRUNCATE else s
 
         try:
+            _run_input_guards(span)
             result = original(self, operation_name, api_params)
 
             if is_streaming:
@@ -113,6 +114,8 @@ def patch_bedrock():
 
             span.status = "ok"
             return result
+        except GuardrailError:
+            raise
         except Exception as e:
             span.status = "error"
             span.attributes["error"] = str(e)

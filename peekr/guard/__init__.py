@@ -39,26 +39,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..span import Span
 
-
-# ── Public exception ──────────────────────────────────────────────────────────
-
-class GuardrailError(Exception):
-    """Raised by a blocking guardrail when the LLM response violates a rule.
-
-    Because the patches call ``export_span`` inside a ``finally`` block, this
-    exception propagates to the caller of the LLM SDK — cancelling the return
-    value so the bad response is never consumed by application code.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        guardrail_name: str = "",
-        span: "Span | None" = None,
-    ) -> None:
-        super().__init__(message)
-        self.guardrail_name = guardrail_name
-        self.span = span
+# GuardrailError lives in context.py so patches can import it without any
+# circular-import risk.  Re-exported here for the public peekr.guard API.
+from ..context import GuardrailError  # noqa: F401  (re-export)
 
 
 # ── Base class ────────────────────────────────────────────────────────────────
@@ -250,6 +233,11 @@ class Blocklist(BaseGuardrail):
 
         # _blocks is instance-level: "raise" → post-storage; others → pre-storage
         self._blocks = (action == "raise")
+        # _input_guard: True when this guard scans inputs and should run
+        # PRE-CALL (before the LLM API is invoked) rather than post-storage.
+        # Pre-call guards are registered via register_input_guard() and are
+        # excluded from _BlockingGuardrailExporter to avoid double-firing.
+        self._input_guard = (action == "raise" and "input" in fields)
 
         flags = 0 if case_sensitive else re.IGNORECASE
         compiled: list[re.Pattern[str]] = []
@@ -429,10 +417,16 @@ class _BlockingGuardrailExporter:
     Because the SDK patches call ``export_span`` inside a ``finally`` block,
     raising here cancels the LLM response return value — the caller receives
     ``GuardrailError`` instead of the model output.
+
+    Input guards (``_input_guard=True``) are excluded: they already fired
+    pre-call via ``_run_input_guards`` and must not double-fire here.
     """
 
     def __init__(self, guardrails: list[BaseGuardrail]) -> None:
-        self.guardrails = [g for g in guardrails if g._blocks]
+        self.guardrails = [
+            g for g in guardrails
+            if g._blocks and not getattr(g, "_input_guard", False)
+        ]
 
     def export(self, span: "Span") -> None:
         first_error: GuardrailError | None = None
