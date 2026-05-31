@@ -328,11 +328,19 @@ class HallucinationBlock(BaseGuardrail):
 
     _blocks = True
 
-    def __init__(self, threshold: float = 0.5, detailed: bool = False) -> None:
+    def __init__(
+        self,
+        threshold: float = 0.5,
+        detailed: bool = False,
+        action: str = "raise",
+    ) -> None:
         if not 0.0 <= threshold <= 1.0:
             raise ValueError(f"threshold must be in [0.0, 1.0], got {threshold!r}")
+        if action not in ("raise", "warn"):
+            raise ValueError(f"action must be 'raise' or 'warn'; got {action!r}")
         self.threshold = threshold
-        self.detailed = detailed
+        self.detailed  = detailed
+        self.action    = action
         self._evaluator = None  # lazy — avoids import cycle at module load time
 
     def _get_evaluator(self):
@@ -366,20 +374,21 @@ class HallucinationBlock(BaseGuardrail):
 
         if score < self.threshold:
             msg = (
-                f"Response blocked: hallucination score {score:.3f} "
-                f"is below threshold {self.threshold:.3f}"
+                f"Hallucination score {score:.3f} below threshold {self.threshold:.3f}"
             )
             span.attributes.setdefault("guardrail_violations", [])
             span.attributes["guardrail_violations"].append(
                 f"HallucinationBlock(score={score:.3f} < threshold={self.threshold})"
             )
-            raise GuardrailError(msg, guardrail_name="HallucinationBlock", span=span)
+            if self.action == "raise":
+                raise GuardrailError(msg, guardrail_name="HallucinationBlock", span=span)
+            # action="warn": violation recorded, response not blocked
 
-        # Passed — record for auditability
-        span.attributes.setdefault("guardrail_warnings", [])
-        span.attributes["guardrail_warnings"].append(
-            f"HallucinationBlock: passed (score={score:.3f}, threshold={self.threshold})"
-        )
+        else:
+            span.attributes.setdefault("guardrail_warnings", [])
+            span.attributes["guardrail_warnings"].append(
+                f"HallucinationBlock: passed (score={score:.3f}, threshold={self.threshold})"
+            )
 
 
 # ── Internal exporters — used by instrument(), not part of public API ─────────
