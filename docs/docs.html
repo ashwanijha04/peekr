@@ -124,6 +124,9 @@
       <a href="#feedback">Feedback + export</a>
       <a href="#experiments">A/B experiments</a>
       <a href="#replay">Trace replay</a>
+      <a href="#guardrails">Guardrails</a>
+      <a href="#trace-naming">Trace naming</a>
+      <a href="#compliance">Compliance (Cloud)</a>
       <a href="#peekr-cloud">Peekr Cloud</a>
     </div>
     <div class="sidebar-section">
@@ -899,6 +902,165 @@ peekr.<span class="fn">instrument</span>(
         <tr><td>Scale</td><td>50M</td><td>$399/mo</td></tr>
       </tbody>
     </table>
+
+    <!-- ── GUARDRAILS ─────────────────────────────────────────────────────────── -->
+    <h2 id="guardrails">Guardrails</h2>
+    <p>Guardrails enforce rules on LLM inputs and outputs. Three built-in types — each wires into the exporter pipeline automatically via <code>instrument(guardrails=[...])</code>.</p>
+
+    <h3 id="guardrails-pii">PIIRedact — strip sensitive data before storage</h3>
+    <p>Scans <code>span.attributes["input"]</code> and <code>span.attributes["output"]</code> and replaces PII with redaction tokens before the span is persisted. Runs <em>before</em> the storage exporter so your observability data stays clean.</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
+    guardrails=[
+        peekr.guard.<span class="fn">PIIRedact</span>(),             <span class="cm"># strips email, phone, SSN, card, IP</span>
+        peekr.guard.<span class="fn">PIIRedact</span>(
+            fields=(<span class="st">"output"</span>,),              <span class="cm"># only scan outputs</span>
+            categories=(<span class="st">"email"</span>, <span class="st">"phone"</span>),   <span class="cm"># specific categories only</span>
+        ),
+    ]
+)</code></pre>
+    <p>Detected categories: <code>email</code>, <code>phone</code>, <code>ssn</code>, <code>credit_card</code>, <code>ip_address</code>.</p>
+
+    <h3 id="guardrails-blocklist">Blocklist — block or redact forbidden patterns</h3>
+    <p>Three actions: <code>"raise"</code> (abort the call), <code>"redact"</code> (replace with <code>[BLOCKED]</code>), <code>"warn"</code> (log only). Use <code>Blocklist.COMMON_SECRETS</code> to catch OpenAI, Anthropic, GitHub, and Slack API keys.</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
+    guardrails=[
+        <span class="cm"># Redact API keys from stored traces</span>
+        peekr.guard.<span class="fn">Blocklist</span>(
+            patterns=peekr.guard.Blocklist.COMMON_SECRETS,
+            action=<span class="st">"redact"</span>,
+        ),
+        <span class="cm"># Block calls where the input contains forbidden terms</span>
+        peekr.guard.<span class="fn">Blocklist</span>(
+            terms=[<span class="st">"confidential"</span>, <span class="st">"internal only"</span>],
+            action=<span class="st">"raise"</span>,
+            fields=(<span class="st">"input"</span>,),   <span class="cm"># checked PRE-CALL — the API is never invoked</span>
+        ),
+    ]
+)</code></pre>
+    <p><strong>Pre-call blocking:</strong> <code>Blocklist(action="raise", fields=("input",))</code> runs <em>before</em> the LLM API call — if the input matches, the call is aborted and an API credit is saved.</p>
+
+    <h3 id="guardrails-hallucination">HallucinationBlock — enforce faithfulness threshold</h3>
+    <p>Raises <code>GuardrailError</code> (or records a warning) when the hallucination score falls below the threshold. Re-uses the score from <code>EvalExporter</code> if available — no second judge call.</p>
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
+    evaluators=[peekr.eval.<span class="fn">Hallucination</span>(detailed=<span class="kw">True</span>)],
+    guardrails=[
+        <span class="cm"># Block responses below 40% grounded — raises GuardrailError</span>
+        peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="fl">0.4</span>),
+
+        <span class="cm"># Warn only — records violation but lets the response through</span>
+        peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="fl">0.2</span>, action=<span class="st">"warn"</span>),
+    ]
+)</code></pre>
+
+    <h3 id="guardrails-full-example">Full example</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(
+    exporter=peekr.<span class="fn">HTTPExporter</span>(
+        endpoint=<span class="st">"https://peekr.starkspherelabs.com"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,
+    ),
+    evaluators=[peekr.eval.<span class="fn">Hallucination</span>(detailed=<span class="kw">True</span>)],
+    guardrails=[
+        peekr.guard.<span class="fn">PIIRedact</span>(),
+        peekr.guard.<span class="fn">Blocklist</span>(
+            patterns=peekr.guard.Blocklist.COMMON_SECRETS, action=<span class="st">"redact"</span>,
+        ),
+        peekr.guard.<span class="fn">Blocklist</span>(
+            terms=[<span class="st">"confidential"</span>], action=<span class="st">"raise"</span>, fields=(<span class="st">"input"</span>,),
+        ),
+        peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="fl">0.3</span>, action=<span class="st">"warn"</span>),
+    ]
+)</code></pre>
+    <p><strong>Pipeline order (load-bearing):</strong> PIIRedact → EvalExporter → storage → HallucinationBlock. PII is stripped before evaluation. Violations are persisted before any GuardrailError propagates.</p>
+
+    <!-- ── TRACE NAMING ────────────────────────────────────────────────────────── -->
+    <h2 id="trace-naming">Trace naming</h2>
+    <p>By default, every chat completion span shows as "LLM call". Peekr infers a purpose label from span attributes — but you can also set it explicitly for precise control.</p>
+
+    <h3>Option 1 — Set the <code>feature</code> attribute (recommended)</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> trace, get_current_span
+
+<span class="kw">@</span><span class="fn">trace</span>(name=<span class="st">"llm.generate_answer"</span>)
+<span class="kw">async def</span> <span class="fn">generate_answer</span>(query: str) -> str:
+    span = <span class="fn">get_current_span</span>()
+    <span class="kw">if</span> span:
+        span.attributes[<span class="st">"feature"</span>] = <span class="st">"generate_answer"</span>
+        span.attributes[<span class="st">"query_preview"</span>] = query[:<span class="fl">80</span>]
+    ...   <span class="cm"># LLM call inside here becomes a child span</span></code></pre>
+    <p>The waterfall shows: <code>Generate answer (gpt-4o-mini) · 4.4k</code> instead of <code>LLM call</code>.</p>
+
+    <p>Built-in <code>feature</code> → label mappings:</p>
+    <table>
+      <thead><tr><th>feature value</th><th>Displayed as</th></tr></thead>
+      <tbody>
+        <tr><td><code>generate_answer</code></td><td>Generate answer</td></tr>
+        <tr><td><code>generate_structured</code></td><td>Structured output</td></tr>
+        <tr><td><code>goal_copilot</code></td><td>Goal suggestions</td></tr>
+        <tr><td><code>entity_extraction</code></td><td>Entity extraction</td></tr>
+        <tr><td><code>classify</code></td><td>Classify</td></tr>
+        <tr><td><code>summarize</code></td><td>Summarise</td></tr>
+        <tr><td><code>recall</code></td><td>Memory recall</td></tr>
+        <tr><td><code>remember</code></td><td>Store memory</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Option 2 — Automatic inference (no code changes)</h3>
+    <p>Peekr reads the system prompt and applies pattern matching. Works for any app with no instrumentation required:</p>
+    <table>
+      <thead><tr><th>System prompt contains</th><th>Displayed as</th></tr></thead>
+      <tbody>
+        <tr><td>"RAGAS Faithfulness" / "strict fact-checker"</td><td>Hallucination eval</td></tr>
+        <tr><td>"memories listed below" / "cited sources"</td><td>Generate answer</td></tr>
+        <tr><td>"JSON schema" / "structured output"</td><td>Structured output</td></tr>
+        <tr><td>"extract entit-"</td><td>Entity extraction</td></tr>
+        <tr><td>"summari-"</td><td>Summarise</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Option 3 — Custom label rules (Peekr Cloud)</h3>
+    <p>In the dashboard under <strong>Settings → Advanced</strong>, define per-project rules that map prompt patterns, feature names, or span names to your own labels:</p>
+    <table>
+      <thead><tr><th>Match field</th><th>Pattern</th><th>Label</th></tr></thead>
+      <tbody>
+        <tr><td>prompt</td><td>You are a support agent for Acme</td><td>Acme Support Reply</td></tr>
+        <tr><td>feature</td><td>onboarding_flow</td><td>Onboarding Q&amp;A</td></tr>
+        <tr><td>span_name</td><td>llm.generate_answer</td><td>RAG Answer</td></tr>
+      </tbody>
+    </table>
+    <p>Rules are applied in priority order before built-in inference. No SDK update required.</p>
+
+    <!-- ── COMPLIANCE ─────────────────────────────────────────────────────────── -->
+    <h2 id="compliance">Compliance guardrails (Cloud)</h2>
+    <p>Peekr Cloud Pro includes industry-specific compliance packs — patterns and required disclosures are maintained server-side and fetched at <code>instrument()</code> time. Rules update when regulations change without requiring an SDK upgrade.</p>
+
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(
+    exporter=peekr.<span class="fn">HTTPExporter</span>(
+        endpoint=<span class="st">"https://peekr.starkspherelabs.com"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,
+    ),
+    compliance=[<span class="st">"FDCPA"</span>, <span class="st">"HIPAA"</span>],   <span class="cm"># fetched from Cloud; enforced locally</span>
+)</code></pre>
+
+    <p>Available packs:</p>
+    <table>
+      <thead><tr><th>Pack</th><th>Regulation</th><th>Blocks / warns</th></tr></thead>
+      <tbody>
+        <tr><td><code>FDCPA</code></td><td>Fair Debt Collection Practices Act</td><td>Unauthorized fee waivers, missing mini-Miranda, threats</td></tr>
+        <tr><td><code>HIPAA</code></td><td>HIPAA Privacy Rule + FDA</td><td>PHI in output, diagnosis as fact, prescribing AI</td></tr>
+        <tr><td><code>FINRA</code></td><td>FINRA Rule 2111 / SEC Reg BI</td><td>Specific investment recommendations, guaranteed returns</td></tr>
+        <tr><td><code>FAIR_HOUSING</code></td><td>Fair Housing Act / RESPA</td><td>Demographic steering, coded neighborhood language</td></tr>
+        <tr><td><code>EEOC_ADA</code></td><td>ADA / GINA / Title VII</td><td>Pre-offer disability, genetic, pregnancy inquiries</td></tr>
+        <tr><td><code>UPL</code></td><td>Unauthorized Practice of Law</td><td>Specific legal strategy, outcome predictions</td></tr>
+        <tr><td><code>TCPA</code></td><td>Telephone Consumer Protection Act</td><td>Missing AI identity disclosure, no opt-out mechanism</td></tr>
+        <tr><td><code>GDPR</code></td><td>GDPR Art. 22 (EU)</td><td>Missing automated-decision disclosure</td></tr>
+        <tr><td><code>EU_AI_ACT</code></td><td>EU AI Act Art. 50</td><td>Missing chatbot AI identity disclosure</td></tr>
+        <tr><td><code>TILA_ECOA</code></td><td>Truth in Lending / Equal Credit</td><td>Guaranteed approval, discriminatory basis, missing APR</td></tr>
+      </tbody>
+    </table>
+    <p>Enable packs in the dashboard under <strong>Compliance</strong>. Each pack can be set to <code>raise</code> (block the response) or <code>warn</code> (record violation, allow through).</p>
 
   </main>
 </div>
