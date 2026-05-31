@@ -13,6 +13,7 @@ from .experiment import experiment
 from .alerts import alert
 from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from . import guard
+from .harnesses.rag import instrument_rag
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
@@ -152,4 +153,6 @@ __all__ = [
     "eval",
     "guard",
     "guard.GuardrailError",
+    # harnesses
+    "instrument_rag",
 ]
