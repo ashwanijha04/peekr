@@ -12,6 +12,7 @@ from .feedback import feedback, export_feedback
 from .experiment import experiment
 from .alerts import alert
 from . import eval as eval  # noqa: A001 — subpackage, not the builtin
+from . import guard
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
@@ -32,6 +33,7 @@ def instrument(
     alerts: list = None,
     evaluators: list = None,
     evaluate_filter=None,
+    guardrails: list = None,
     tenant_id: str | None = None,
     retention_class: str | None = None,
     sample_rate: float | None = None,
@@ -48,6 +50,15 @@ def instrument(
 
     alerts=[...]        → fire callbacks when thresholds are crossed
     evaluators=[...]    → score LLM outputs after each call
+    guardrails=[...]    → enforce rules on inputs/outputs; may raise GuardrailError
+
+    Guardrail pipeline order (ensures PII-free storage and auditable blocks):
+      1. _MutatingGuardrailExporter  — PIIRedact etc., run before eval + storage
+      2. EvalExporter                — eval_scores attached to span
+      3. AlertExporter               — threshold alerts
+      4. Storage exporters           — JSONL / SQLite / HTTP (span now includes scores)
+      5. _BlockingGuardrailExporter  — HallucinationBlock etc., raise after storage
+                                       so violations are always persisted
 
     tenant_id           → process-wide default tenant (B2B customer org).
                           Overridden per-request by peekr.session(tenant_id=...).
@@ -74,31 +85,34 @@ def instrument(
         keep_errors=keep_errors,
     )
 
-    # Order matters. Exporters run in the order they're registered, on the
-    # SAME span object. EvalExporter and AlertExporter mutate span.attributes
-    # (eval_scores / alerts), so they MUST run before any storage exporter —
-    # otherwise JSONL/SQLite serialize the span before the scores are written
-    # and you get traces with empty `eval_scores`. (Reported by users running
-    # peekr with a real RAG workload.)
+    # Exporter pipeline. Order is load-bearing — see docstring above.
     if exporter:
         add_exporter(exporter)
     else:
-        # 1) Console first — purely a display tool, doesn't mutate.
+        # 1) Console — display only, no mutations.
         if console:
             add_exporter(ConsoleExporter())
-        # 2) Mutators (eval + alerts) BEFORE persistence.
+        # 2) Mutating guardrails FIRST — redact PII before eval sees the text.
+        if guardrails:
+            from .guard import _MutatingGuardrailExporter
+            add_exporter(_MutatingGuardrailExporter(guardrails))
+        # 3) Evaluators — scores written to span.attributes["eval_scores"].
         if evaluators:
             from .eval import EvalExporter
             add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter))
+        # 4) Alerts.
         if alerts:
             from .alerts import AlertExporter
             add_exporter(AlertExporter(alerts))
-        # 3) Persistence last — what's written to disk now includes any
-        #    attributes the mutators added (notably eval_scores).
+        # 5) Storage — span is fully annotated (redacted + scored) by now.
         if storage in ("jsonl", "both"):
             add_exporter(JSONLExporter(jsonl_path))
         if storage in ("sqlite", "both"):
             add_exporter(SQLiteExporter(db_path))
+        # 6) Blocking guardrails LAST — raise after storage so violations persist.
+        if guardrails:
+            from .guard import _BlockingGuardrailExporter
+            add_exporter(_BlockingGuardrailExporter(guardrails))
 
     if not _patched:
         patch_openai()
@@ -123,4 +137,6 @@ __all__ = [
     "experiment",
     "alert",
     "eval",
+    "guard",
+    "guard.GuardrailError",
 ]
