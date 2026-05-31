@@ -29,6 +29,7 @@ class _OpenAIStreamWrapper:
         self._span = span
         self._token = token
         self._done = False
+        self._parts: list[str] = []
 
     def __iter__(self):
         try:
@@ -38,7 +39,16 @@ class _OpenAIStreamWrapper:
                     self._span.attributes["tokens_input"]  = usage.prompt_tokens
                     self._span.attributes["tokens_output"] = usage.completion_tokens
                     self._span.attributes["tokens_total"]  = usage.total_tokens
+                try:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        self._parts.append(delta)
+                except (AttributeError, IndexError):
+                    pass
                 yield chunk
+            if self._parts:
+                out = "".join(self._parts)
+                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -75,6 +85,7 @@ class _AsyncOpenAIStreamWrapper:
         self._span = span
         self._token = token
         self._done = False
+        self._parts: list[str] = []
 
     def __aiter__(self):
         return self._iterate()
@@ -87,7 +98,16 @@ class _AsyncOpenAIStreamWrapper:
                     self._span.attributes["tokens_input"]  = usage.prompt_tokens
                     self._span.attributes["tokens_output"] = usage.completion_tokens
                     self._span.attributes["tokens_total"]  = usage.total_tokens
+                try:
+                    delta = chunk.choices[0].delta.content
+                    if delta:
+                        self._parts.append(delta)
+                except (AttributeError, IndexError):
+                    pass
                 yield chunk
+            if self._parts:
+                out = "".join(self._parts)
+                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"

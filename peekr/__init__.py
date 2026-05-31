@@ -86,38 +86,46 @@ def instrument(
     )
 
     # Exporter pipeline. Order is load-bearing — see docstring above.
-    if exporter:
-        add_exporter(exporter)
-    else:
+    # Evaluators, guardrails, and alerts are PRE-STORAGE processors —
+    # they run regardless of which storage backend is chosen.
+    if not exporter:
         # 1) Console — display only, no mutations.
         if console:
             add_exporter(ConsoleExporter())
-        # 2) Mutating guardrails FIRST — redact PII before eval sees the text.
-        #    Also register any input-blocking guardrails for pre-call checks.
-        if guardrails:
-            from .guard import _MutatingGuardrailExporter
-            from .context import register_input_guard
-            add_exporter(_MutatingGuardrailExporter(guardrails))
-            for g in guardrails:
-                if getattr(g, "_input_guard", False):
-                    register_input_guard(g)
-        # 3) Evaluators — scores written to span.attributes["eval_scores"].
-        if evaluators:
-            from .eval import EvalExporter
-            add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter))
-        # 4) Alerts.
-        if alerts:
-            from .alerts import AlertExporter
-            add_exporter(AlertExporter(alerts))
-        # 5) Storage — span is fully annotated (redacted + scored) by now.
+
+    # 2) Mutating guardrails FIRST — redact PII before eval sees the text.
+    #    Also register any input-blocking guardrails for pre-call checks.
+    if guardrails:
+        from .guard import _MutatingGuardrailExporter
+        from .context import register_input_guard
+        add_exporter(_MutatingGuardrailExporter(guardrails))
+        for g in guardrails:
+            if getattr(g, "_input_guard", False):
+                register_input_guard(g)
+
+    # 3) Evaluators — scores written to span.attributes["eval_scores"].
+    if evaluators:
+        from .eval import EvalExporter
+        add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter))
+
+    # 4) Alerts.
+    if alerts:
+        from .alerts import AlertExporter
+        add_exporter(AlertExporter(alerts))
+
+    # 5) Storage — span is fully annotated (redacted + scored) by now.
+    if exporter:
+        add_exporter(exporter)
+    else:
         if storage in ("jsonl", "both"):
             add_exporter(JSONLExporter(jsonl_path))
         if storage in ("sqlite", "both"):
             add_exporter(SQLiteExporter(db_path))
-        # 6) Blocking guardrails LAST — raise after storage so violations persist.
-        if guardrails:
-            from .guard import _BlockingGuardrailExporter
-            add_exporter(_BlockingGuardrailExporter(guardrails))
+
+    # 6) Blocking guardrails LAST — raise after storage so violations persist.
+    if guardrails:
+        from .guard import _BlockingGuardrailExporter
+        add_exporter(_BlockingGuardrailExporter(guardrails))
 
     if not _patched:
         patch_openai()
