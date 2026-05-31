@@ -13,6 +13,7 @@ from .experiment import experiment
 from .alerts import alert
 from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from . import guard
+from .middleware import FastAPIMiddleware, PeekrASGIMiddleware  # noqa: F401
 from .harnesses.rag import instrument_rag
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
@@ -170,6 +171,9 @@ __all__ = [
     "eval",
     "guard",
     "guard.GuardrailError",
+    # middleware
+    "FastAPIMiddleware",
+    "PeekrASGIMiddleware",
     # harnesses
     "instrument_rag",
 ]
