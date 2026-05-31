@@ -124,6 +124,7 @@
       <a href="#feedback">Feedback + export</a>
       <a href="#experiments">A/B experiments</a>
       <a href="#replay">Trace replay</a>
+      <a href="#middleware">FastAPI middleware</a>
       <a href="#guardrails">Guardrails</a>
       <a href="#trace-naming">Trace naming</a>
       <a href="#compliance">Compliance (Cloud)</a>
@@ -194,10 +195,13 @@ pip install "peekr[all]"            <span class="cm"># both</span></code></pre>
 
     <!-- QUICKSTART -->
     <h2 id="quickstart">Quickstart</h2>
-    <p>Add two lines before your agent runs:</p>
+
+    <h3>Script / standalone agent — 2 lines</h3>
+    <p>Add these two lines at the very top of your entrypoint, <em>before any other imports that load an LLM SDK</em>:</p>
     <pre><div class="pre-header">agent.py</div><code><span class="kw">import</span> peekr
 peekr.<span class="fn">instrument</span>()
 
+<span class="cm"># everything below is unchanged</span>
 <span class="kw">import</span> openai
 
 response = openai.chat.completions.<span class="fn">create</span>(
@@ -205,12 +209,30 @@ response = openai.chat.completions.<span class="fn">create</span>(
     messages=[{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Hello"</span>}]
 )</code></pre>
     <p>Every LLM call is now traced automatically. Peekr writes to <code>traces.jsonl</code> and prints to the console.</p>
-    <p>View your traces:</p>
     <pre><div class="pre-header">terminal</div><code>peekr view traces.jsonl          <span class="cm"># tree view</span>
 peekr view --io traces.jsonl     <span class="cm"># include inputs and outputs</span></code></pre>
-    <pre><div class="pre-header">output</div><code><span class="gr">Trace a3f2b1c0  843ms  312tok</span>
-────────────────────────────────────────────────
-<span class="fn">openai.chat.completions</span> [gpt-4o]  843ms  312tok</code></pre>
+
+    <h3>FastAPI / Starlette service — 3 lines</h3>
+    <p>If your agent runs inside an HTTP server, add the middleware after creating the app. This creates a root span for every request so all LLM calls appear nested under the route that triggered them:</p>
+    <pre><div class="pre-header">main.py</div><code><span class="kw">import</span> peekr
+peekr.<span class="fn">instrument</span>()                                  <span class="cm"># line 1</span>
+
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+app = FastAPI()
+app.<span class="fn">add_middleware</span>(peekr.<span class="fn">FastAPIMiddleware</span>)          <span class="cm"># line 2</span>
+
+<span class="cm"># optional — ship traces to Peekr Cloud</span>
+peekr.<span class="fn">instrument</span>(
+    exporter=peekr.<span class="fn">HTTPExporter</span>(
+        endpoint=<span class="st">"https://peekr.starkspherelabs.com"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,                          <span class="cm"># line 3</span>
+    ),
+)</code></pre>
+    <p>Waterfall with middleware:</p>
+    <pre><div class="pre-header">output</div><code>● POST /v1/answer  19.3s    <span class="cm">← root — full request duration</span>
+    ├─ Embed query    1.4s
+    └─ Generate answer 16.4s  ·  6.0k tok  ·  0.20¢</code></pre>
+    <p>Without middleware, the same spans appear as a flat list with no parent. See <a href="#middleware">FastAPI middleware</a> for all options.</p>
 
     <!-- EXAMPLES -->
     <h2 id="debug-wrong-answer">Example: Debug a wrong answer</h2>
@@ -912,6 +934,84 @@ peekr.<span class="fn">instrument</span>(
         <tr><td>Scale</td><td>50M</td><td>$399/mo</td></tr>
       </tbody>
     </table>
+
+    <!-- ── FASTAPI MIDDLEWARE ─────────────────────────────────────────────────── -->
+    <h2 id="middleware">FastAPI middleware</h2>
+    <p><code>peekr.FastAPIMiddleware</code> (alias: <code>PeekrASGIMiddleware</code>) is a pure ASGI middleware that creates a root span for every HTTP request. All child spans — LLM calls, embeddings, <code>@trace</code> decorators — nest under it automatically. This turns a flat list of sibling spans into a proper trace tree.</p>
+
+    <p><strong>Without middleware</strong> — spans appear as unrelated siblings:</p>
+    <pre><div class="pre-header">waterfall</div><code>● openai.embeddings          1.4s   ← no parent
+● openai.chat.completions   16.4s   ← no parent (same trace, but floating)</code></pre>
+
+    <p><strong>With middleware</strong> — every span is a child of the request:</p>
+    <pre><div class="pre-header">waterfall</div><code>● POST /v1/answer   19.3s          ← root span, full duration
+    ├─ Embed query     1.4s
+    └─ Generate answer 16.4s  ·  6.0k tok  ·  0.20¢</code></pre>
+
+    <h3>FastAPI — one line</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+
+peekr.<span class="fn">instrument</span>(...)   <span class="cm"># existing call — no changes needed</span>
+
+app = FastAPI()
+app.<span class="fn">add_middleware</span>(peekr.<span class="fn">FastAPIMiddleware</span>)   <span class="cm"># ← one new line</span></code></pre>
+
+    <h3>Starlette / raw ASGI</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> PeekrASGIMiddleware
+
+app = PeekrASGIMiddleware(app)   <span class="cm"># wrap any ASGI app</span></code></pre>
+
+    <h3>Options</h3>
+    <pre><div class="pre-header">python</div><code>app.<span class="fn">add_middleware</span>(
+    peekr.<span class="fn">FastAPIMiddleware</span>,
+    tenant_header=<span class="st">"X-Tenant-Id"</span>,   <span class="cm"># header → span.attributes["tenant_id"]</span>
+    user_header=<span class="st">"X-User-Id"</span>,       <span class="cm"># header → span.attributes["user_id"]</span>
+    skip_paths={<span class="st">"/healthz"</span>, <span class="st">"/metrics"</span>},  <span class="cm"># paths that get no span (default set included)</span>
+)</code></pre>
+
+    <table>
+      <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>tenant_header</code></td><td><code>"X-Tenant-Id"</code></td><td>Request header copied to <code>span.attributes["tenant_id"]</code></td></tr>
+        <tr><td><code>user_header</code></td><td><code>"X-User-Id"</code></td><td>Request header copied to <code>span.attributes["user_id"]</code></td></tr>
+        <tr><td><code>skip_paths</code></td><td><code>{"/healthz", "/health", "/metrics", "/ping"}</code></td><td>Exact paths that skip instrumentation entirely</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Span attributes set by the middleware</h3>
+    <table>
+      <thead><tr><th>Attribute</th><th>Example value</th></tr></thead>
+      <tbody>
+        <tr><td><code>http.method</code></td><td><code>"POST"</code></td></tr>
+        <tr><td><code>http.path</code></td><td><code>"/v1/answer"</code></td></tr>
+        <tr><td><code>http.status_code</code></td><td><code>200</code></td></tr>
+        <tr><td><code>endpoint</code></td><td><code>"/v1/answer"</code> (FastAPI route pattern when available)</td></tr>
+        <tr><td><code>tenant_id</code></td><td>Value of <code>X-Tenant-Id</code> header</td></tr>
+        <tr><td><code>user_id</code></td><td>Value of <code>X-User-Id</code> header</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Streaming responses</h3>
+    <p>The middleware uses pure ASGI (not <code>BaseHTTPMiddleware</code>), so it handles streaming correctly. The root span closes when the <em>last byte</em> is sent — not when the response headers are sent. This means the span duration for a Server-Sent Events (SSE) endpoint reflects the full time the client is connected and receiving data.</p>
+
+    <h3>What it does NOT trace automatically</h3>
+    <p>The middleware creates the root span and nests all peekr-patched LLM calls under it. It does <em>not</em> automatically trace:</p>
+    <ul>
+      <li>Database queries (Supabase, PostgreSQL, Redis) — use <code>@peekr.trace</code></li>
+      <li>HTTP calls to external APIs via httpx/aiohttp — use <code>@peekr.trace</code></li>
+      <li>Cohere, Pinecone, or other non-LLM SDKs — use <code>@peekr.trace</code></li>
+    </ul>
+    <p>For those, wrap the function:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr <span class="kw">import</span> trace, get_current_span
+
+<span class="kw">@</span><span class="fn">trace</span>(name=<span class="st">"db.recall_memories"</span>)
+<span class="kw">def</span> <span class="fn">recall_memories</span>(query: str, tenant_id: str):
+    span = <span class="fn">get_current_span</span>()
+    <span class="kw">if</span> span:
+        span.attributes[<span class="st">"query_preview"</span>] = query[:<span class="fl">80</span>]
+        span.attributes[<span class="st">"tenant_id"</span>] = tenant_id
+    <span class="kw">return</span> db.<span class="fn">rpc</span>(<span class="st">"recall_memories_hybrid"</span>, {...}).<span class="fn">execute</span>()</code></pre>
 
     <!-- ── GUARDRAILS ─────────────────────────────────────────────────────────── -->
     <h2 id="guardrails">Guardrails</h2>
