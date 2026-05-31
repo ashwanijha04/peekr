@@ -668,6 +668,9 @@ FROM spans GROUP BY model;</pre>
     <div class="feature-card"><div class="feature-icon">⏮️</div><h3>Trace replay</h3><p>Re-run any stored trace with the same inputs. Debug production issues locally.</p></div>
     <div class="feature-card"><div class="feature-icon">🔌</div><h3>Custom exporters</h3><p>One method to ship spans to Datadog, Grafana, or your own backend.</p></div>
     <div class="feature-card"><div class="feature-icon">🔒</div><h3>Privacy first</h3><p>Nothing leaves your machine by default. Use <code>capture_io=False</code> for sensitive functions.</p></div>
+    <div class="feature-card"><div class="feature-icon">🛡️</div><h3>Guardrails</h3><p><code>PIIRedact</code>, <code>Blocklist</code>, <code>HallucinationBlock</code> — enforce rules on inputs and outputs. Pre-call blocking, post-call violation recording.</p></div>
+    <div class="feature-card"><div class="feature-icon">⚖️</div><h3>Compliance packs (Cloud)</h3><p>17 regulatory packs — FDCPA, HIPAA, FINRA, GDPR, EU AI Act, UAE PDPL, KSA PDPL and more. Enforced on every LLM call. Rules update without SDK changes.</p></div>
+    <div class="feature-card"><div class="feature-icon">🌐</div><h3>FastAPI middleware</h3><p><code>app.add_middleware(peekr.FastAPIMiddleware)</code> — one line gives every request a root span. All LLM calls nest under it automatically as children.</p></div>
   </div>
 </section>
 
