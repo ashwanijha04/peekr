@@ -772,6 +772,92 @@ peekr replay a3f2b1c0 --db traces.db
 peekr replay a3f2b1c0 --jsonl traces.jsonl</code></pre>
     <div class="callout">Replay re-runs the stored LLM inputs through the live SDK. The agent itself is not re-invoked — only the LLM calls are replayed. This means tool calls are not replicated, but you get a new trace showing exactly what the model produces with those inputs today.</div>
 
+    <!-- GUARDRAILS -->
+    <h2 id="guardrails">Guardrails</h2>
+    <p>Guardrails are synchronous, in-path enforcement rules that run on every LLM span. Two categories:</p>
+    <ul>
+      <li><strong>Mutating guardrails</strong> — run <em>before</em> eval and storage. Redact PII, strip secrets, or log warnings without blocking the response.</li>
+      <li><strong>Blocking guardrails</strong> — run <em>after</em> storage. Raise <code>GuardrailError</code> to prevent the response from reaching application code.</li>
+    </ul>
+
+    <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
+
+peekr.<span class="fn">instrument</span>(
+    guardrails=[
+        peekr.guard.<span class="fn">PIIRedact</span>(),                                    <span class="cm"># strip PII before storage</span>
+        peekr.guard.<span class="fn">Blocklist</span>(
+            terms=[<span class="st">"confidential"</span>, <span class="st">"internal only"</span>],
+            action=<span class="st">"raise"</span>,                                        <span class="cm"># block the response</span>
+        ),
+        peekr.guard.<span class="fn">Blocklist</span>(
+            patterns=peekr.guard.Blocklist.COMMON_SECRETS,
+            action=<span class="st">"redact"</span>,                                       <span class="cm"># redact API keys from traces</span>
+        ),
+        peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="st">0.5</span>),            <span class="cm"># block ungrounded responses</span>
+    ]
+)</code></pre>
+
+    <div class="callout"><strong>Combine with evaluators.</strong> <code>HallucinationBlock</code> reuses the score from <code>peekr.eval.Hallucination</code> when both are wired — the LLM judge runs only once.
+    <pre style="margin-top:0.75rem"><code>peekr.<span class="fn">instrument</span>(
+    evaluators=[peekr.eval.<span class="fn">Hallucination</span>(detailed=<span class="kw">True</span>)],
+    guardrails=[peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="st">0.4</span>)],
+)</code></pre>
+    </div>
+
+    <h3>PIIRedact</h3>
+    <p>Strips personal data from <code>span.attributes["input"]</code> and <code>span.attributes["output"]</code> before any storage exporter runs. Detected categories: <code>email</code>, <code>phone</code>, <code>ssn</code>, <code>credit_card</code>, <code>ip_address</code>.</p>
+    <pre><div class="pre-header">python</div><code><span class="cm"># Redact everything (default)</span>
+peekr.guard.<span class="fn">PIIRedact</span>()
+
+<span class="cm"># Only emails and phones, only from output</span>
+peekr.guard.<span class="fn">PIIRedact</span>(
+    fields=(<span class="st">"output"</span>,),
+    categories=(<span class="st">"email"</span>, <span class="st">"phone"</span>),
+)</code></pre>
+
+    <h3>Blocklist</h3>
+    <p>Three actions:</p>
+    <ul>
+      <li><code>"raise"</code> — raises <code>GuardrailError</code> after the LLM call (post-storage). The violation is audited before the error propagates.</li>
+      <li><code>"redact"</code> — replaces matches with <code>[BLOCKED]</code> before storage (pre-storage). Useful for API keys in prompts.</li>
+      <li><code>"warn"</code> — records to <code>guardrail_warnings</code> without modifying the span.</li>
+    </ul>
+    <pre><div class="pre-header">python</div><code><span class="cm"># Block on exact terms</span>
+peekr.guard.<span class="fn">Blocklist</span>(terms=[<span class="st">"confidential"</span>], action=<span class="st">"raise"</span>)
+
+<span class="cm"># Redact common API key / secret patterns</span>
+peekr.guard.<span class="fn">Blocklist</span>(
+    patterns=peekr.guard.Blocklist.COMMON_SECRETS,
+    action=<span class="st">"redact"</span>,
+)
+
+<span class="cm"># Scan only inputs, case-sensitive</span>
+peekr.guard.<span class="fn">Blocklist</span>(
+    terms=[<span class="st">"SECRET"</span>],
+    fields=(<span class="st">"input"</span>,),
+    case_sensitive=<span class="kw">True</span>,
+    action=<span class="st">"warn"</span>,
+)</code></pre>
+
+    <h3>HallucinationBlock</h3>
+    <p>Raises <code>GuardrailError</code> when a response scores below the faithfulness threshold. The violation span is always stored before the error propagates — full audit trail guaranteed.</p>
+    <pre><div class="pre-header">python</div><code><span class="cm"># Block any response less than 40% grounded</span>
+peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="st">0.4</span>)
+
+<span class="cm"># With detailed RAGAS claim breakdown</span>
+peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="st">0.5</span>, detailed=<span class="kw">True</span>)</code></pre>
+
+    <h3>Handling GuardrailError</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> peekr.guard <span class="kw">import</span> GuardrailError
+
+<span class="kw">try</span>:
+    response = client.chat.completions.create(...)
+<span class="kw">except</span> GuardrailError <span class="kw">as</span> e:
+    print(<span class="st">f"Blocked by {e.guardrail_name}: {e}"</span>)
+    <span class="cm"># e.span contains the full span that was stored — inspect attributes</span></code></pre>
+
+    <div class="callout"><strong>Guardrails in Peekr Cloud.</strong> Every violation, redaction, and warning is recorded on the span and visible in the Guardrails tab of your project dashboard at <a href="https://peekr.starkspherelabs.com">peekr.starkspherelabs.com</a>.</div>
+
     <!-- PEEKR CLOUD -->
     <h2 id="peekr-cloud">Peekr Cloud</h2>
     <p>The OSS SDK runs in your process, writes to local files, and is <strong>MIT licensed forever</strong>. When a single-process file isn't the right fit any more — multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage — <a href="https://peekr.starkspherelabs.com">Peekr Cloud</a> is the managed backend.</p>
