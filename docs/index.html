@@ -185,8 +185,8 @@
 <!-- HERO -->
 <section class="hero">
   <div class="badge">Open Source · MIT · Free forever</div>
-  <h1>Agents are black boxes.<br /><em>Peekr makes them transparent.</em></h1>
-  <p class="hero-sub">Like cProfile — but for AI agents. Every LLM call, tool invocation, token count, and error recorded as a tree you can inspect. Two lines to add, no backend required.</p>
+  <h1>Agents are black boxes.<br /><em>Know exactly what it got wrong.</em></h1>
+  <p class="hero-sub">Like cProfile — but for AI agents, with built-in hallucination detection. Every LLM call, tool invocation, and token count recorded as a tree you can inspect. Two lines to add, no backend required.</p>
   <div class="cta-group">
     <a href="docs.html" class="btn btn-primary">Get started →</a>
     <a href="https://github.com/ashwanijha04/peekr" class="btn btn-star">⭐ Star on GitHub</a>
@@ -277,8 +277,8 @@
 <!-- PAIN SCENARIOS -->
 <section class="pain">
   <div class="section-header">
-    <h2>A profiler for every layer of your agent</h2>
-    <p>CPU profilers only see timing. Agents fail for reasons that have nothing to do with performance.</p>
+    <h2>Four problems. One library.</h2>
+    <p>Wrong answers, hallucinations, slow responses, and runaway costs — Peekr shows you exactly what to fix.</p>
   </div>
 
   <div class="scenario">
@@ -287,7 +287,7 @@
       <div>
         <h3>"My agent gave the wrong answer"</h3>
         <span class="fix">Fix: see what the LLM actually received</span>
-        <p>Not what you think was sent — what was <em>actually</em> sent. Peekr captures every message so you can catch malformed context before it reaches the model.</p>
+        <p>Malformed tool output is the silent killer. Peekr captures the full call tree — tool inputs, tool outputs, what the LLM got — so you find the mismatch in seconds, not hours.</p>
       </div>
     </div>
     <pre><span class="hl-blue">agent.run</span>  2100ms
@@ -304,8 +304,8 @@
       <div class="scenario-icon">🌀</div>
       <div>
         <h3>"My agent is hallucinating"</h3>
-        <span class="fix">Fix: score every output for groundedness, catch the regression</span>
-        <p>The <code style="background:var(--bg3);padding:0.1em 0.35em;border-radius:3px;font-family:'SFMono-Regular',monospace;font-size:0.82em;color:var(--green);">Hallucination</code> evaluator scores each LLM response against its context — 1.0 = every claim grounded, 0.0 = invented. Scores ride on the span and are queryable in SQL.</p>
+        <span class="fix">Fix: know which exact claim was wrong — not just a score</span>
+        <p>Peekr breaks every LLM response into individual sentences and verdicts each one: supported, contradicted, or unsupported. You see exactly which claim failed, not just that something did.</p>
       </div>
     </div>
     <pre><span class="hl-blue">openai.chat</span> [gpt-4o]  843ms  312tok
@@ -319,8 +319,8 @@
       <div class="scenario-icon">⏱️</div>
       <div>
         <h3>"My agent is too slow"</h3>
-        <span class="fix">Fix: cache or parallelize the right thing</span>
-        <p>The trace shows exactly where time went. Most developers assume the LLM is the bottleneck and start swapping models. It almost never is.</p>
+        <span class="fix">Fix: the LLM is almost never the bottleneck</span>
+        <p>Most teams swap models first. The trace shows wall-clock time split across every tool and LLM call — 80% of the time the fix is a cache, not a different model.</p>
       </div>
     </div>
     <pre><span class="hl-blue">agent.run</span>  4300ms
@@ -334,8 +334,8 @@
       <div class="scenario-icon">💸</div>
       <div>
         <h3>"My API bill is too high"</h3>
-        <span class="fix">Fix: summarize history after 5 turns, cut costs 60–80%</span>
-        <p>Token counts across traces reveal patterns invisible in your code. Growing tokens every run is the signature of unbounded history.</p>
+        <span class="fix">Fix: token counts growing run-over-run means unbounded history</span>
+        <p>Growing tokens every run is the signature of unbounded conversation history. Peekr shows the slope, identifies the feature causing it, and tells you exactly where to cap it.</p>
       </div>
     </div>
     <pre><span class="hl-muted">Trace 1:</span>  18,432 tokens   · $0.018
@@ -343,18 +343,6 @@
 <span class="hl-muted">Trace 3:</span>  <span class="hl-red">24,891 tokens</span>   · <span class="hl-red">$0.025</span>   ← unbounded growth</pre>
   </div>
 
-  <div class="scenario">
-    <div class="scenario-header">
-      <div class="scenario-icon">🐛</div>
-      <div>
-        <h3>"It works locally but fails in prod"</h3>
-        <span class="fix">Fix: the bug is in your data pipeline, not your agent</span>
-        <p>The trace shows what your tools actually returned — not what you assume they returned. Compare local and prod traces side by side.</p>
-      </div>
-    </div>
-    <pre><span class="hl-muted"># local</span>   <span class="hl-blue">tool.fetch_inventory</span>  8ms   out: [{"id": 1, "qty": 42}]
-<span class="hl-muted"># prod</span>    <span class="hl-blue">tool.fetch_inventory</span>  8ms   out: <span class="hl-red">[]</span>  ← empty. Data pipeline bug.</pre>
-  </div>
 </section>
 
 <!-- CODE DEMO -->
@@ -592,7 +580,7 @@ FROM spans GROUP BY model;</pre>
     <table class="compare-table">
       <tr>
         <th></th>
-        <th>Print statements</th>
+        <th>Helicone</th>
         <th>LangSmith</th>
         <th>OpenTelemetry</th>
         <th class="us">peekr</th>
@@ -606,21 +594,21 @@ FROM spans GROUP BY model;</pre>
       </tr>
       <tr>
         <td>No account required</td>
-        <td class="yes">✓</td>
+        <td class="no">✗</td>
         <td class="no">✗</td>
         <td class="yes">✓</td>
         <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Works with any framework</td>
-        <td class="yes">✓</td>
+        <td class="partial">〜</td>
         <td class="no">✗</td>
         <td class="yes">✓</td>
         <td class="us yes">✓</td>
       </tr>
       <tr>
         <td>Captures token counts</td>
-        <td class="no">✗</td>
+        <td class="yes">✓</td>
         <td class="yes">✓</td>
         <td class="no">✗</td>
         <td class="us yes">✓</td>
@@ -648,7 +636,7 @@ FROM spans GROUP BY model;</pre>
       </tr>
       <tr>
         <td>Data stays on your machine</td>
-        <td class="yes">✓</td>
+        <td class="no">✗</td>
         <td class="no">✗</td>
         <td class="partial">〜</td>
         <td class="us yes">✓</td>
@@ -685,26 +673,23 @@ FROM spans GROUP BY model;</pre>
 
 <!-- PEEKR CLOUD -->
 <section class="cloud" style="max-width: 860px; margin: 5rem auto; padding: 2.5rem 2rem; background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;">
-  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-    <span style="background: rgba(88,166,255,0.12); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); border-radius: 4px; padding: 0.15rem 0.55rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;">COMING SOON</span>
-  </div>
   <h2 style="font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.6rem;">Peekr Cloud</h2>
   <p style="color: var(--muted); font-size: 1rem; line-height: 1.7; margin-bottom: 1.5rem;">
     The OSS SDK is <strong>MIT licensed forever</strong> — that's not changing. When a single-process file isn't the right fit any more (multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage), Peekr Cloud is the optional managed backend.
   </p>
   <p style="color: var(--muted); font-size: 0.92rem; line-height: 1.7; margin-bottom: 1.5rem;">
-    The wire format is already in v0.3 — <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">tenant_id</code> and <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">retention_class</code> exist specifically so the spans you produce today work without modification when you connect:
+    The wire format is the same — <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">tenant_id</code> and <code style="color: var(--green); background: var(--bg3); padding: 0.1em 0.35em; border-radius: 3px;">retention_class</code> are first-class on every span, so the traces you produce locally ship to the Cloud dashboard unchanged:
   </p>
   <pre style="background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.25rem; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.82rem; line-height: 1.75; overflow-x: auto; margin-bottom: 1.75rem;"><span class="kw">import</span> peekr
 
 peekr.<span class="fn">instrument</span>(
     tenant_id=<span class="st">"acme"</span>,
     exporter=peekr.<span class="fn">HTTPExporter</span>(
-        endpoint=<span class="st">"https://ingest.peekr.cloud"</span>,
+        endpoint=<span class="st">"https://ingest.peekr.starkspherelabs.com"</span>,
         api_key=<span class="st">"pk_live_…"</span>,
     ),
 )</pre>
-  <a href="https://github.com/ashwanijha04/peekr/discussions" class="btn btn-primary" style="display: inline-block;">Join the waitlist →</a>
+  <a href="https://peekr.starkspherelabs.com" class="btn btn-primary" style="display: inline-block;">Sign up free →</a>
 </section>
 
 <!-- STAR CTA -->
