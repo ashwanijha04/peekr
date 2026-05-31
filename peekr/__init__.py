@@ -35,6 +35,7 @@ def instrument(
     evaluators: list = None,
     evaluate_filter=None,
     guardrails: list = None,
+    compliance: list | None = None,  # list of pack names, e.g. ["FDCPA", "HIPAA"]
     tenant_id: str | None = None,
     retention_class: str | None = None,
     sample_rate: float | None = None,
@@ -113,6 +114,22 @@ def instrument(
     if alerts:
         from .alerts import AlertExporter
         add_exporter(AlertExporter(alerts))
+
+    # 4b) Cloud compliance guardrails — fetched from Peekr Cloud, enforced locally.
+    #     Merged into the guardrails pipeline so they benefit from the same
+    #     pre-storage mutating / post-storage blocking split.
+    if compliance and exporter is not None:
+        from .guard._cloud_compliance import CloudComplianceGuard
+        # Extract api_key + endpoint from HTTPExporter if present
+        _api_key  = getattr(exporter, "api_key",  None)
+        _endpoint = getattr(exporter, "endpoint", "https://peekr.starkspherelabs.com")
+        if _api_key:
+            _cg = CloudComplianceGuard(
+                api_key=_api_key,
+                endpoint=_endpoint,
+                packs=compliance,
+            )
+            guardrails = list(guardrails or []) + [_cg]
 
     # 5) Storage — span is fully annotated (redacted + scored) by now.
     if exporter:

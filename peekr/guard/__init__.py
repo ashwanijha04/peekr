@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 # GuardrailError lives in context.py so patches can import it without any
 # circular-import risk.  Re-exported here for the public peekr.guard API.
 from ..context import GuardrailError  # noqa: F401  (re-export)
+from ._cloud_compliance import CloudComplianceGuard  # noqa: F401
 
 
 # ── Base class ────────────────────────────────────────────────────────────────
