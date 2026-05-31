@@ -752,19 +752,45 @@ peekr replay a3f2b1c0 --jsonl traces.jsonl</code></pre>
 
     <!-- PEEKR CLOUD -->
     <h2 id="peekr-cloud">Peekr Cloud</h2>
-    <p>The OSS SDK runs in your process, writes to local files, and is <strong>MIT licensed forever</strong>. When a single-process file isn't the right fit any more — multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage — Peekr Cloud is the optional managed backend.</p>
-    <p>The wire format is already in the SDK. <code>tenant_id</code> and <code>retention_class</code> exist in v0.3 specifically so the spans you're producing today work without modification when you connect.</p>
+    <p>The OSS SDK runs in your process, writes to local files, and is <strong>MIT licensed forever</strong>. When a single-process file isn't the right fit any more — multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage — <a href="https://peekr.starkspherelabs.com">Peekr Cloud</a> is the managed backend.</p>
+    <p><strong>Sign up at <a href="https://peekr.starkspherelabs.com">peekr.starkspherelabs.com</a></strong> — free up to 10k spans/month, no card required. Once you have a <code>pk_live_</code> key from your project's Settings page:</p>
+
+    <h3>1 — Install</h3>
+    <pre><div class="pre-header">bash</div><code>pip install <span class="st">"peekr[openai]"</span>   <span class="cm"># or anthropic, langchain, crewai, etc.</span></code></pre>
+
+    <h3>2 — Instrument</h3>
     <pre><div class="pre-header">python</div><code><span class="kw">import</span> peekr
 
 peekr.<span class="fn">instrument</span>(
-    tenant_id=<span class="st">"acme"</span>,
+    tenant_id=<span class="st">"acme"</span>,          <span class="cm"># your customer's org — optional but recommended</span>
     exporter=peekr.<span class="fn">HTTPExporter</span>(
-        endpoint=<span class="st">"https://ingest.peekr.cloud"</span>,
-        api_key=<span class="st">"pk_live_…"</span>,
+        endpoint=<span class="st">"https://peekr.starkspherelabs.com"</span>,
+        api_key=<span class="st">"pk_live_…"</span>,   <span class="cm"># from Settings → API keys</span>
     ),
 )</code></pre>
-    <p><code>HTTPExporter</code> ships as a stub in v0.3 — the constructor signature is stable so you can wire your call sites today, and they won't change when the implementation lands. Until then it raises <code>NotImplementedError</code> on <code>.export()</code> so a misconfigured pipeline fails loudly rather than silently dropping spans.</p>
-    <p><strong>Get on the waitlist</strong> → <a href="https://github.com/ashwanijha04/peekr/discussions">GitHub Discussions</a>.</p>
+    <p>That's the entire integration. <code>instrument()</code> auto-patches whichever LLM SDKs and agent frameworks are installed — every call is captured with zero further changes to your code. Spans batch in the background and appear in the dashboard within 5 seconds.</p>
+
+    <h3>3 — TypeScript</h3>
+    <pre><div class="pre-header">typescript</div><code><span class="kw">import</span> { instrument } <span class="kw">from</span> <span class="st">"@peekr/sdk"</span>;
+
+<span class="fn">instrument</span>({
+  exporter: {
+    type: <span class="st">"http"</span>,
+    endpoint: <span class="st">"https://peekr.starkspherelabs.com"</span>,
+    apiKey: <span class="st">"pk_live_…"</span>,
+  },
+});</code></pre>
+
+    <h3>Pricing</h3>
+    <table>
+      <thead><tr><th>Tier</th><th>Spans / month</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr><td>Free</td><td>10k</td><td>$0</td></tr>
+        <tr><td>Starter</td><td>500k</td><td>$29/mo</td></tr>
+        <tr><td>Pro</td><td>5M</td><td>$99/mo</td></tr>
+        <tr><td>Scale</td><td>50M</td><td>$399/mo</td></tr>
+      </tbody>
+    </table>
 
   </main>
 </div>
