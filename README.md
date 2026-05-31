@@ -520,24 +520,32 @@ The TypeScript SDK writes the same JSONL schema as Python, so a Node app's trace
 
 ## Peekr Cloud
 
-The OSS SDK runs in your process, writes to local files, and is **MIT licensed forever** — that's not changing. When a single-process file isn't the right fit any more (multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage), Peekr Cloud is the optional managed backend.
+The OSS SDK runs in your process, writes to local files, and is **MIT licensed forever** — that's not changing. When a single-process file isn't the right fit any more (multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage), Peekr Cloud is the managed backend.
 
-The wire format is already in v0.3 — `tenant_id` and `retention_class` exist specifically so the spans you produce today work without modification when you connect.
+**[Sign up at peekr.cloud.ashwanijha.dev](https://peekr.cloud.ashwanijha.dev)** — free up to 10k spans/month, no card required.
+
+Once you have a `pk_live_` key from the project settings page:
 
 ```python
 import peekr
+
 peekr.instrument(
     tenant_id="acme",
     exporter=peekr.HTTPExporter(
-        endpoint="https://ingest.peekr.cloud",
+        endpoint="https://peekr.cloud.ashwanijha.dev",
         api_key="pk_live_…",
     ),
 )
 ```
 
-`HTTPExporter` ships as a stub in v0.3 — the constructor signature is stable so you can wire your call sites today, and they won't change when the implementation lands. Until then it raises `NotImplementedError` on `.export()` so a misconfigured pipeline fails loudly rather than silently dropping spans.
+`HTTPExporter` is fully implemented as of v0.5 — batched, retried, flushed at interpreter exit. The spans you already instrument locally ship to the Cloud dashboard unchanged; `tenant_id` and `retention_class` are first-class columns.
 
-**Get on the waitlist** → [GitHub Discussions](https://github.com/ashwanijha04/peekr/discussions).
+| Tier | Spans / month | Price |
+|---|---|---|
+| Free | 10k | $0 |
+| Starter | 500k | $29/mo |
+| Pro | 5M | $99/mo |
+| Scale | 50M | $399/mo |
 
 ---
 
