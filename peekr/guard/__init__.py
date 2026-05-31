@@ -4,9 +4,11 @@ Two categories run at different points in the exporter pipeline:
 
   Mutating guardrails (run BEFORE eval + storage)
     PIIRedact   — strip personal data from span attributes before persistence
+    Blocklist   — redact or warn on forbidden keywords/patterns (action != "raise")
 
   Blocking guardrails (run AFTER storage)
     HallucinationBlock — raise GuardrailError when hallucination score < threshold
+    Blocklist          — raise GuardrailError on forbidden terms (action == "raise")
 
 Usage::
 
@@ -15,6 +17,8 @@ Usage::
     peekr.instrument(
         guardrails=[
             peekr.guard.PIIRedact(),
+            peekr.guard.Blocklist(terms=["confidential"], action="raise"),
+            peekr.guard.Blocklist(patterns=peekr.guard.Blocklist.COMMON_SECRETS, action="redact"),
             peekr.guard.HallucinationBlock(threshold=0.4),
         ]
     )
@@ -165,6 +169,133 @@ class PIIRedact(BaseGuardrail):
                 f"PIIRedact: [{', '.join(sorted(redacted_cats))}] "
                 f"removed from [{', '.join(redacted_fields)}]"
             )
+
+
+# ── Blocklist ─────────────────────────────────────────────────────────────────
+
+class Blocklist(BaseGuardrail):
+    """Block, redact, or warn when forbidden terms or patterns appear in spans.
+
+    Three actions — which also determines the pipeline phase:
+
+    * ``"raise"``  — raises ``GuardrailError`` (post-storage, blocking).
+                     The LLM call has already been made; this prevents the
+                     response from reaching application code and records the
+                     violation. To stop secrets from reaching the LLM at all,
+                     filter your prompts before constructing them.
+    * ``"redact"`` — replaces matches with ``[BLOCKED]`` before storage
+                     (pre-storage, mutating). Useful for sanitising API keys
+                     or internal codenames from stored traces.
+    * ``"warn"``   — records to ``guardrail_warnings`` without modifying
+                     the span (pre-storage, mutating). Good for auditing
+                     without disrupting the pipeline.
+
+    Parameters
+    ----------
+    terms
+        Exact strings to match (case-insensitive by default).
+    patterns
+        Regular-expression strings. Use ``Blocklist.COMMON_SECRETS`` for a
+        pre-built set that catches OpenAI / Anthropic / GitHub key formats,
+        Bearer tokens, and private-key headers.
+    action
+        ``"raise"`` | ``"redact"`` | ``"warn"``. Default ``"raise"``.
+    fields
+        Span attributes to scan. Default: ``("input", "output")``.
+    case_sensitive
+        When ``True``, term matching is case-sensitive. Default ``False``.
+
+    Examples
+    --------
+    ::
+
+        # Raise if "confidential" appears anywhere in input or output
+        Blocklist(terms=["confidential", "internal only"], action="raise")
+
+        # Redact common API key patterns from stored traces
+        Blocklist(patterns=Blocklist.COMMON_SECRETS, action="redact")
+
+        # Only scan inputs, case-sensitive
+        Blocklist(terms=["SECRET"], fields=("input",), case_sensitive=True)
+    """
+
+    # Pre-built patterns for common API key / secret formats
+    COMMON_SECRETS: list[str] = [
+        r"sk-[A-Za-z0-9\-]{20,}",                   # OpenAI API keys (sk-... and sk-proj-...)
+        r"sk-ant-api\d{2}-[A-Za-z0-9\-]{93,}",     # Anthropic API keys
+        r"AIza[A-Za-z0-9\-_]{35}",                  # Google / Gemini API keys
+        r"ghp_[A-Za-z0-9]{36}",                     # GitHub personal access tokens
+        r"ghs_[A-Za-z0-9]{36}",                     # GitHub Actions tokens
+        r"xoxb-[0-9]+-[A-Za-z0-9\-]+",             # Slack bot tokens
+        r"-----BEGIN [A-Z ]+ PRIVATE KEY-----",      # PEM private keys
+        r"(?i)bearer\s+[A-Za-z0-9\-._~+/]{20,}",   # Generic Bearer tokens
+    ]
+
+    def __init__(
+        self,
+        terms: list[str] | None = None,
+        patterns: list[str] | None = None,
+        action: str = "raise",
+        fields: tuple[str, ...] = ("input", "output"),
+        case_sensitive: bool = False,
+    ) -> None:
+        if action not in ("raise", "redact", "warn"):
+            raise ValueError(f"action must be 'raise', 'redact', or 'warn'; got {action!r}")
+        if not terms and not patterns:
+            raise ValueError("Blocklist requires at least one of: terms, patterns")
+
+        self.action = action
+        self.fields = fields
+        self.case_sensitive = case_sensitive
+
+        # _blocks is instance-level: "raise" → post-storage; others → pre-storage
+        self._blocks = (action == "raise")
+
+        flags = 0 if case_sensitive else re.IGNORECASE
+        compiled: list[re.Pattern[str]] = []
+        for term in (terms or []):
+            compiled.append(re.compile(re.escape(term), flags))
+        for pat in (patterns or []):
+            compiled.append(re.compile(pat, flags))
+        self._patterns = compiled
+
+    def run(self, span: "Span") -> None:
+        for field in self.fields:
+            value = span.attributes.get(field)
+            if not isinstance(value, str):
+                continue
+
+            matches = [p for p in self._patterns if p.search(value)]
+            if not matches:
+                continue
+
+            match_count = len(matches)
+
+            if self.action == "redact":
+                for pat in matches:
+                    value = pat.sub("[BLOCKED]", value)
+                span.attributes[field] = value
+                span.attributes.setdefault("guardrail_warnings", [])
+                span.attributes["guardrail_warnings"].append(
+                    f"Blocklist: redacted {match_count} pattern(s) from {field!r}"
+                )
+
+            elif self.action == "warn":
+                span.attributes.setdefault("guardrail_warnings", [])
+                span.attributes["guardrail_warnings"].append(
+                    f"Blocklist: {match_count} blocked pattern(s) detected in {field!r}"
+                )
+
+            elif self.action == "raise":
+                span.attributes.setdefault("guardrail_violations", [])
+                span.attributes["guardrail_violations"].append(
+                    f"Blocklist: blocked pattern in {field!r}"
+                )
+                raise GuardrailError(
+                    f"Blocked: forbidden term detected in {field!r}",
+                    guardrail_name="Blocklist",
+                    span=span,
+                )
 
 
 # ── LLM span prefixes (kept in sync with eval/__init__.py) ───────────────────
@@ -321,6 +452,7 @@ __all__ = [
     "GuardrailError",
     "BaseGuardrail",
     "PIIRedact",
+    "Blocklist",
     "HallucinationBlock",
     "_MutatingGuardrailExporter",
     "_BlockingGuardrailExporter",

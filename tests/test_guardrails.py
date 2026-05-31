@@ -8,6 +8,7 @@ from peekr.span import Span
 from peekr.guard import (
     GuardrailError,
     PIIRedact,
+    Blocklist,
     HallucinationBlock,
     _MutatingGuardrailExporter,
     _BlockingGuardrailExporter,
@@ -108,6 +109,194 @@ class TestPIIRedact:
         span.attributes["input"] = "user email: a@b.com"
         guard.run(span)
         assert "[EMAIL]" in span.attributes["input"]
+
+
+# ── Blocklist ─────────────────────────────────────────────────────────────────
+
+class TestBlocklist:
+
+    # ── action="raise" ────────────────────────────────────────────────────────
+
+    def test_raises_on_blocked_term_in_input(self):
+        guard = Blocklist(terms=["confidential"], action="raise")
+        span = _llm_span(input_text="This is confidential data.")
+        with pytest.raises(GuardrailError) as exc_info:
+            guard.run(span)
+        assert exc_info.value.guardrail_name == "Blocklist"
+
+    def test_raises_on_blocked_term_in_output(self):
+        guard = Blocklist(terms=["secret"], action="raise")
+        span = _llm_span(output_text="The answer is secret.")
+        with pytest.raises(GuardrailError):
+            guard.run(span)
+
+    def test_raise_records_violation_on_span(self):
+        guard = Blocklist(terms=["forbidden"], action="raise")
+        span = _llm_span(input_text="This contains forbidden content.")
+        with pytest.raises(GuardrailError):
+            guard.run(span)
+        assert "guardrail_violations" in span.attributes
+        assert any("Blocklist" in v for v in span.attributes["guardrail_violations"])
+
+    def test_no_raise_when_term_absent(self):
+        guard = Blocklist(terms=["confidential"], action="raise")
+        span = _llm_span(input_text="This is totally fine.")
+        guard.run(span)  # must not raise
+
+    def test_case_insensitive_by_default(self):
+        guard = Blocklist(terms=["CONFIDENTIAL"], action="raise")
+        span = _llm_span(input_text="This is confidential.")
+        with pytest.raises(GuardrailError):
+            guard.run(span)
+
+    def test_case_sensitive_option(self):
+        guard = Blocklist(terms=["CONFIDENTIAL"], action="raise", case_sensitive=True)
+        span = _llm_span(input_text="This is confidential.")
+        guard.run(span)  # lowercase — should not raise
+
+    def test_blocks_is_true_for_raise(self):
+        guard = Blocklist(terms=["x"], action="raise")
+        assert guard._blocks is True
+
+    # ── action="redact" ───────────────────────────────────────────────────────
+
+    def test_redacts_term_from_field(self):
+        guard = Blocklist(terms=["secret"], action="redact")
+        span = _llm_span(output_text="The secret is 42.")
+        guard.run(span)
+        assert "secret" not in span.attributes["output"]
+        assert "[BLOCKED]" in span.attributes["output"]
+
+    def test_redact_warning_recorded(self):
+        guard = Blocklist(terms=["internal"], action="redact")
+        span = _llm_span(output_text="This is internal only.")
+        guard.run(span)
+        assert "guardrail_warnings" in span.attributes
+        assert any("redacted" in w for w in span.attributes["guardrail_warnings"])
+
+    def test_redact_does_not_raise(self):
+        guard = Blocklist(terms=["secret"], action="redact")
+        span = _llm_span(output_text="Very secret output.")
+        guard.run(span)  # must not raise
+
+    def test_blocks_is_false_for_redact(self):
+        guard = Blocklist(terms=["x"], action="redact")
+        assert guard._blocks is False
+
+    # ── action="warn" ─────────────────────────────────────────────────────────
+
+    def test_warn_does_not_mutate_or_raise(self):
+        guard = Blocklist(terms=["classified"], action="warn")
+        original = "This is classified info."
+        span = _llm_span(output_text=original)
+        guard.run(span)
+        assert span.attributes["output"] == original  # unchanged
+        assert "guardrail_warnings" in span.attributes
+
+    def test_blocks_is_false_for_warn(self):
+        guard = Blocklist(terms=["x"], action="warn")
+        assert guard._blocks is False
+
+    # ── regex patterns ────────────────────────────────────────────────────────
+
+    def test_regex_pattern_match(self):
+        guard = Blocklist(patterns=[r"\bsk-[A-Za-z0-9]{20,}\b"], action="raise")
+        span = _llm_span(input_text="My key is sk-abcdefghijklmnopqrstu123")
+        with pytest.raises(GuardrailError):
+            guard.run(span)
+
+    def test_regex_no_match(self):
+        guard = Blocklist(patterns=[r"\bsk-[A-Za-z0-9]{20,}\b"], action="raise")
+        span = _llm_span(input_text="No key here.")
+        guard.run(span)  # must not raise
+
+    def test_common_secrets_catches_openai_key(self):
+        guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="redact")
+        span = _llm_span(input_text="Use key: sk-proj-abcdefghijklmnopqrstuvwxyz123456")
+        guard.run(span)
+        assert "[BLOCKED]" in span.attributes["input"]
+
+    def test_common_secrets_catches_bearer_token(self):
+        guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="redact")
+        span = _llm_span(input_text="Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9")
+        guard.run(span)
+        assert "[BLOCKED]" in span.attributes["input"]
+
+    def test_common_secrets_catches_private_key_header(self):
+        guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="redact")
+        span = _llm_span(input_text="-----BEGIN RSA PRIVATE KEY-----\nMIIE...")
+        guard.run(span)
+        assert "[BLOCKED]" in span.attributes["input"]
+
+    # ── mixed terms + patterns ────────────────────────────────────────────────
+
+    def test_terms_and_patterns_together(self):
+        guard = Blocklist(
+            terms=["forbidden"],
+            patterns=[r"sk-[A-Za-z0-9]{10,}"],
+            action="redact",
+        )
+        span = _llm_span(output_text="forbidden key: sk-abcdefghijk")
+        guard.run(span)
+        assert "forbidden" not in span.attributes["output"]
+        assert "sk-" not in span.attributes["output"]
+
+    # ── field scoping ─────────────────────────────────────────────────────────
+
+    def test_only_scans_specified_fields(self):
+        guard = Blocklist(terms=["secret"], action="raise", fields=("input",))
+        span = _llm_span(input_text="fine", output_text="secret in output")
+        guard.run(span)  # output not scanned — must not raise
+
+    def test_scans_multiple_fields(self):
+        guard = Blocklist(terms=["secret"], action="redact", fields=("input", "output"))
+        span = _llm_span(input_text="secret input", output_text="secret output")
+        guard.run(span)
+        assert "[BLOCKED]" in span.attributes["input"]
+        assert "[BLOCKED]" in span.attributes["output"]
+
+    # ── validation ────────────────────────────────────────────────────────────
+
+    def test_invalid_action_raises(self):
+        with pytest.raises(ValueError, match="action must be"):
+            Blocklist(terms=["x"], action="delete")
+
+    def test_no_terms_or_patterns_raises(self):
+        with pytest.raises(ValueError, match="at least one"):
+            Blocklist()
+
+    def test_skips_non_string_fields(self):
+        guard = Blocklist(terms=["secret"], action="raise")
+        span = _llm_span()
+        span.attributes["input"] = {"nested": "secret"}  # not a string
+        guard.run(span)  # must not raise
+
+
+# ── Blocklist in exporter pipeline ────────────────────────────────────────────
+
+class TestBlocklistInPipeline:
+
+    def test_raise_blocklist_in_blocking_exporter(self):
+        guard = Blocklist(terms=["classified"], action="raise")
+        exp = _BlockingGuardrailExporter([guard])
+        span = _llm_span(input_text="classified project details")
+        with pytest.raises(GuardrailError):
+            exp.export(span)
+
+    def test_redact_blocklist_in_mutating_exporter(self):
+        guard = Blocklist(terms=["internal"], action="redact")
+        exp = _MutatingGuardrailExporter([guard])
+        span = _llm_span(output_text="internal only document")
+        exp.export(span)
+        assert "[BLOCKED]" in span.attributes["output"]
+
+    def test_warn_blocklist_in_mutating_exporter(self):
+        guard = Blocklist(terms=["draft"], action="warn")
+        exp = _MutatingGuardrailExporter([guard])
+        span = _llm_span(output_text="this is a draft proposal")
+        exp.export(span)
+        assert "guardrail_warnings" in span.attributes
+        assert span.attributes["output"] == "this is a draft proposal"  # unchanged
 
 
 # ── HallucinationBlock ────────────────────────────────────────────────────────
