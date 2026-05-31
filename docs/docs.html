@@ -138,6 +138,14 @@
       <a href="#compliance-gdpr" style="padding-left:12px;font-size:0.8em">GDPR · Automated decisions</a>
       <a href="#compliance-eu-ai-act" style="padding-left:12px;font-size:0.8em">EU AI Act · Chatbot identity</a>
       <a href="#compliance-banking" style="padding-left:12px;font-size:0.8em">TILA/ECOA · Banking</a>
+      <a href="#compliance-uae" style="padding-left:4px;font-size:0.75em;color:var(--orange)">— UAE / MENA —</a>
+      <a href="#compliance-uae-pdpl" style="padding-left:12px;font-size:0.8em">UAE PDPL · Data protection</a>
+      <a href="#compliance-uae-difc" style="padding-left:12px;font-size:0.8em">UAE DIFC · Dubai finance</a>
+      <a href="#compliance-uae-adgm" style="padding-left:12px;font-size:0.8em">UAE ADGM · Abu Dhabi</a>
+      <a href="#compliance-uae-cbuae" style="padding-left:12px;font-size:0.8em">UAE CBUAE · Banking AI</a>
+      <a href="#compliance-uae-dha" style="padding-left:12px;font-size:0.8em">UAE DHA · Health data</a>
+      <a href="#compliance-uae-rera" style="padding-left:12px;font-size:0.8em">UAE RERA · Real estate</a>
+      <a href="#compliance-ksa-pdpl" style="padding-left:12px;font-size:0.8em">KSA PDPL · Saudi Arabia</a>
       <a href="#peekr-cloud">Peekr Cloud</a>
     </div>
     <div class="sidebar-section">
@@ -1168,8 +1176,110 @@ peekr.<span class="fn">instrument</span>(
         <tr><td><code>GDPR</code></td><td>GDPR Art. 22 (EU)</td><td>Missing automated-decision disclosure</td></tr>
         <tr><td><code>EU_AI_ACT</code></td><td>EU AI Act Art. 50</td><td>Missing chatbot AI identity disclosure</td></tr>
         <tr><td><code>TILA_ECOA</code></td><td>Truth in Lending / Equal Credit</td><td>Guaranteed approval, discriminatory basis, missing APR</td></tr>
+        <tr><td colspan="3" style="padding:4px 8px;font-size:0.75em;color:var(--muted);border:none">— UAE / MENA —</td></tr>
+        <tr><td><code>UAE_PDPL</code></td><td>UAE Personal Data Protection Law</td><td>Consent violations, indefinite retention, sensitive data without consent</td></tr>
+        <tr><td><code>UAE_DIFC</code></td><td>DIFC Data Protection Law 2020</td><td>Missing automated decision disclosure, no human review option</td></tr>
+        <tr><td><code>UAE_ADGM</code></td><td>ADGM Data Protection Regulations</td><td>Automated decision disclosure, cross-border transfer without safeguards</td></tr>
+        <tr><td><code>UAE_CBUAE</code></td><td>Central Bank UAE Consumer Standards</td><td>Guaranteed returns, unauthorized fee changes, missing financial disclaimer</td></tr>
+        <tr><td><code>UAE_DHA</code></td><td>Dubai Health Authority — Health Data</td><td>Clinical diagnosis claims, prescribing AI, patient data without consent</td></tr>
+        <tr><td><code>UAE_RERA</code></td><td>Dubai RERA — Real Estate</td><td>Guaranteed property returns, demographic steering, unregistered property</td></tr>
+        <tr><td><code>KSA_PDPL</code></td><td>Saudi Arabia PDPL</td><td>Cross-border transfer without SDAIA approval, sensitive data consent, automated decision disclosure</td></tr>
       </tbody>
     </table>
+    <h2 id="compliance-uae">UAE / MENA Compliance Packs</h2>
+    <p>UAE and Saudi Arabia are building major AI hubs (Dubai AI Roadmap 2031, ADGM AI Framework, NEOM) while simultaneously introducing data protection and sector-specific AI regulations. Peekr's MENA packs are modelled on the actual regulatory frameworks but should be reviewed by local legal counsel before production deployment.</p>
+
+    <pre><div class="pre-header">python</div><code>peekr.<span class="fn">instrument</span>(
+    exporter=peekr.<span class="fn">HTTPExporter</span>(endpoint=<span class="st">"..."</span>, api_key=<span class="st">"pk_live_…"</span>),
+    compliance=[<span class="st">"UAE_PDPL"</span>, <span class="st">"UAE_CBUAE"</span>],   <span class="cm"># mix UAE packs freely</span>
+)</code></pre>
+
+    <h3 id="compliance-uae-pdpl">UAE PDPL — Federal Data Protection</h3>
+    <p><em>Federal Decree-Law No. 45 of 2021. Applies across UAE outside DIFC and ADGM free zones. Covers any AI agent that processes personal data of UAE residents.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li>Selling or sharing personal data without consent</li>
+      <li>Retaining data indefinitely without a defined period</li>
+      <li>Processing sensitive data (health, biometric, financial, religious, political) without explicit consent</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This is an automated system.</code></li>
+      <li><code>You have the right to access your personal data.</code></li>
+    </ul>
+    <p><strong>Penalties:</strong> Up to AED 1,000,000 per violation. Criminal liability for intentional breaches.</p>
+
+    <h3 id="compliance-uae-difc">UAE DIFC — Dubai International Financial Centre</h3>
+    <p><em>DIFC Data Protection Law 2020, Arts. 36-38. Applies to all DIFC-licensed entities. AI making automated decisions with legal or significant effects must provide disclosure and human review rights.</em></p>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This decision involved automated processing.</code></li>
+      <li><code>You have the right to request human review.</code></li>
+      <li><code>You are interacting with an AI.</code></li>
+    </ul>
+    <p><strong>Prohibited:</strong> Claiming an automated decision is final or irreversible without offering human review. Processing sensitive data without explicit consent.</p>
+    <p><strong>Penalties:</strong> DIFC Commissioner can issue enforcement notices; fines up to USD 100,000 per violation for serious breaches.</p>
+
+    <h3 id="compliance-uae-adgm">UAE ADGM — Abu Dhabi Global Market</h3>
+    <p><em>ADGM Data Protection Regulations. GDPR-equivalent framework for all ADGM-registered entities. Closely mirrors GDPR Art. 22 automated decision requirements.</em></p>
+    <p><strong>Required disclosures:</strong> Same as DIFC — automated processing disclosure, right to object, AI identity. Cross-border transfer requires adequacy or safeguards equivalent to GDPR SCCs.</p>
+    <p><strong>Penalties:</strong> FSRA enforcement; fines aligned with DIFC scale.</p>
+
+    <h3 id="compliance-uae-cbuae">UAE CBUAE — Central Bank Consumer Finance</h3>
+    <p><em>Central Bank of UAE Consumer Protection Standards. Required for AI agents in banking, lending, investment, and financial advice operating in UAE.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li>Guaranteed returns, risk-free investments, certain profit predictions</li>
+      <li>Specific AED/dirham return amounts without disclaimer</li>
+      <li>Unauthorized fee or charge modifications ("I can waive that fee")</li>
+      <li>Omitting documentation or verification requirements</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>This is general information and not financial advice.</code></li>
+      <li><code>Past performance does not guarantee future results.</code></li>
+    </ul>
+    <p><strong>Penalties:</strong> CBUAE enforcement action; fines up to AED 3,000,000 for consumer protection violations.</p>
+
+    <h3 id="compliance-uae-dha">UAE DHA — Health Data</h3>
+    <p><em>Dubai Health Authority Digital Health Strategy + UAE health data regulations. Similar principles to HIPAA but UAE-specific. Required for any AI handling patient data or providing health information in UAE.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li>Stating a clinical diagnosis as fact</li>
+      <li>Claims that the AI can diagnose, treat, or cure disease</li>
+      <li>Medication prescribing or dosage recommendations</li>
+      <li>Sharing patient data without consent</li>
+    </ul>
+    <p><strong>Required disclosures:</strong> <code>This is not medical advice.</code> + <code>Consult a licensed healthcare professional.</code></p>
+    <p><strong>Penalties:</strong> DHA regulatory action; criminal liability for unlicensed medical practice.</p>
+
+    <h3 id="compliance-uae-rera">UAE RERA — Real Estate</h3>
+    <p><em>Dubai Real Estate Regulatory Agency advertising and consumer protection rules. Required for property search, investment, and rental AI agents operating in Dubai.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li>Guaranteed property investment returns or price predictions stated as certain</li>
+      <li>Demographic steering language in property descriptions</li>
+      <li>Advertising unregistered or off-plan projects without DLD/RERA registration reference</li>
+    </ul>
+    <p><strong>Required disclosures:</strong> Prices are indicative; not a binding offer.</p>
+
+    <h3 id="compliance-ksa-pdpl">KSA PDPL — Saudi Arabia Data Protection</h3>
+    <p><em>Saudi Arabia Personal Data Protection Law (Royal Decree M/19, 2021; updated 2023, enforced September 2023). Applies to any AI processing data of Saudi residents regardless of where the processor is located.</em></p>
+    <p><strong>Prohibited outputs:</strong></p>
+    <ul>
+      <li>Cross-border data transfer without SDAIA (Saudi Data and AI Authority) approval</li>
+      <li>Processing sensitive data (health, biometric, genetic, financial, religious, criminal) without explicit consent</li>
+      <li>Retaining data beyond the stated purpose period</li>
+      <li>Claiming an automated decision cannot be reviewed or appealed</li>
+    </ul>
+    <p><strong>Required disclosures:</strong></p>
+    <ul>
+      <li><code>Your data is processed in accordance with the Saudi Arabia Personal Data Protection Law.</code></li>
+      <li><code>You have the right to access, correct, and request deletion of your personal data.</code></li>
+      <li><code>This decision involved automated processing.</code></li>
+    </ul>
+    <p><strong>Penalties:</strong> Up to SAR 5,000,000 (≈USD 1.3M) per violation. Criminal liability for intentional violations. SDAIA has active enforcement from 2023.</p>
+
     <p>Enable packs in the dashboard under <strong>Compliance</strong>. Each pack can be set to <code>raise</code> (block the response) or <code>warn</code> (record violation, allow through).</p>
 
     <h3 id="compliance-fdcpa">FDCPA — Debt Collection</h3>
