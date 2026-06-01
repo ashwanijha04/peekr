@@ -127,6 +127,7 @@
       <a href="#middleware">FastAPI middleware</a>
       <a href="#guardrails">Guardrails</a>
       <a href="#trace-naming">Trace naming</a>
+      <a href="#otel-receive">OTel receive (enterprise)</a>
       <a href="#compliance">Compliance (Cloud)</a>
       <a href="#compliance-fdcpa" style="padding-left:12px;font-size:0.8em">FDCPA · Debt collection</a>
       <a href="#compliance-hipaa" style="padding-left:12px;font-size:0.8em">HIPAA · Healthcare</a>
@@ -902,6 +903,69 @@ peekr.guard.<span class="fn">HallucinationBlock</span>(threshold=<span class="st
     <div class="callout"><strong>Guardrails in Peekr Cloud.</strong> Every violation, redaction, and warning is recorded on the span and visible in the Guardrails tab of your project dashboard at <a href="https://peekr.starkspherelabs.com">peekr.starkspherelabs.com</a>.</div>
 
     <!-- PEEKR CLOUD -->
+    <!-- ── OTEL RECEIVE ───────────────────────────────────────────────────────── -->
+    <h2 id="otel-receive">OTel receive — enterprise ingest</h2>
+    <p>Enterprise teams with existing OpenTelemetry pipelines can send spans to Peekr Cloud <em>without changing any instrumentation</em>. Just add Peekr as a second exporter target alongside Datadog, Honeycomb, or any other backend. Peekr applies hallucination scoring, compliance guardrails, and the dashboard on top.</p>
+
+    <pre><div class="pre-header">architecture</div><code>Your agents
+    └─ OTel SDK / LangChain / LlamaIndex / Traceloop
+          └─ OTel Collector
+                ├─ Datadog exporter     (existing)
+                ├─ Honeycomb exporter   (existing)
+                └─ Peekr exporter  ←── add this, zero other changes</code></pre>
+
+    <h3>OpenTelemetry Collector</h3>
+    <pre><div class="pre-header">otel-collector-config.yaml</div><code>exporters:
+  otlphttp/peekr:
+    endpoint: <span class="st">https://peekr.starkspherelabs.com/otlp</span>
+    headers:
+      Authorization: <span class="st">"Bearer pk_live_…"</span>
+
+service:
+  pipelines:
+    traces:
+      exporters: [otlphttp/datadog, otlphttp/peekr]</code></pre>
+
+    <h3>Grafana Alloy</h3>
+    <pre><div class="pre-header">alloy.config</div><code>otelcol.exporter.otlphttp <span class="st">"peekr"</span> {
+  client {
+    endpoint = <span class="st">"https://peekr.starkspherelabs.com/otlp"</span>
+    headers  = { Authorization = <span class="st">"Bearer pk_live_…"</span> }
+  }
+}</code></pre>
+
+    <h3>Python — existing OTel SDK setup</h3>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> opentelemetry.exporter.otlp.proto.http.trace_exporter <span class="kw">import</span> OTLPSpanExporter
+
+peekr_exporter = <span class="fn">OTLPSpanExporter</span>(
+    endpoint=<span class="st">"https://peekr.starkspherelabs.com/otlp/v1/traces"</span>,
+    headers={<span class="st">"Authorization"</span>: <span class="st">"Bearer pk_live_…"</span>},
+)</code></pre>
+
+    <h3>How Peekr reads your spans</h3>
+    <p>Different frameworks use different attribute names for the same thing. Peekr normalises them automatically — no config needed:</p>
+    <table>
+      <thead>
+        <tr><th>What Peekr needs</th><th>Gen AI (OTel standard)</th><th>OpenInference (LangChain)</th><th>LangSmith legacy</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Model name</td><td><code>gen_ai.request.model</code></td><td><code>llm.model_name</code></td><td><code>llm_model_name</code></td></tr>
+        <tr><td>Input tokens</td><td><code>gen_ai.usage.input_tokens</code></td><td><code>llm.token_count.prompt</code></td><td><code>token_usage.prompt_tokens</code></td></tr>
+        <tr><td>Output tokens</td><td><code>gen_ai.usage.output_tokens</code></td><td><code>llm.token_count.completion</code></td><td><code>token_usage.completion_tokens</code></td></tr>
+        <tr><td>Input text</td><td><code>gen_ai.prompt</code></td><td><code>input.value</code></td><td>—</td></tr>
+        <tr><td>Output text</td><td><code>gen_ai.completion</code></td><td><code>output.value</code></td><td>—</td></tr>
+        <tr><td>Tenant</td><td><code>tenant.id</code> (resource)</td><td><code>tenant.id</code></td><td><code>tenant_id</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>One thing you need to do</h3>
+    <p>Set a distinct <code>service.name</code> in each service's OTel resource — this is already standard practice. Peekr uses it to separate traffic in the dashboard:</p>
+    <pre><div class="pre-header">python</div><code><span class="kw">from</span> opentelemetry.sdk.resources <span class="kw">import</span> Resource
+resource = Resource.create({<span class="st">"service.name"</span>: <span class="st">"my-agent"</span>, <span class="st">"tenant.id"</span>: <span class="st">"acme"</span>})</code></pre>
+
+    <h3>What OTel receive cannot do (vs the Peekr SDK)</h3>
+    <p>Hallucination scoring and compliance guardrails require the full input/output text in span attributes. Many OTel instrumentations only capture token counts, not text — those spans will show cost and latency but skip eval. For full coverage, use <code>peekr.instrument()</code> directly. OTel receive is for teams who cannot change their instrumentation.</p>
+
     <h2 id="peekr-cloud">Peekr Cloud</h2>
     <p>The OSS SDK runs in your process, writes to local files, and is <strong>MIT licensed forever</strong>. When a single-process file isn't the right fit any more — multiple services, a team that needs shared dashboards, longer retention, audit-grade trace storage — <a href="https://peekr.starkspherelabs.com">Peekr Cloud</a> is the managed backend.</p>
     <p><strong>Sign up at <a href="https://peekr.starkspherelabs.com">peekr.starkspherelabs.com</a></strong> — free up to 10k spans/month, no card required. Once you have a <code>pk_live_</code> key from your project's Settings page:</p>
