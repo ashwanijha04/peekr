@@ -131,7 +131,8 @@ def instrument(
                 endpoint=_endpoint,
                 packs=compliance,
             )
-            guardrails = list(guardrails or []) + [_cg]
+            # Prepend so compliance sees the raw output before PIIRedact runs
+            guardrails = [_cg] + list(guardrails or [])
 
     # 5) Storage — span is fully annotated (redacted + scored) by now.
     if exporter:
