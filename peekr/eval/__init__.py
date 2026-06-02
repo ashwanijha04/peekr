@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 _in_eval: ContextVar[bool] = ContextVar("_in_eval", default=False)
 
 # Prefixes that identify LLM spans
-_LLM_PREFIXES = ("openai.", "anthropic.", "bedrock.")
+_LLM_PREFIXES = ("openai.", "anthropic.", "bedrock.", "gemini.", "google.")
 
 
 class BaseEvaluator(abc.ABC):
@@ -52,9 +52,7 @@ class EvalExporter:
         self.span_filter = span_filter
 
     def export(self, span: Span) -> None:
-        # Only evaluate LLM spans
-        if not any(span.name.startswith(p) for p in _LLM_PREFIXES):
-            return
+        attrs = span.attributes or {}
 
         # Do not recurse into evaluation
         if _in_eval.get():
@@ -63,7 +61,20 @@ class EvalExporter:
         # Skip spans explicitly marked as internal (e.g. evaluator judge calls
         # tagged by the SDK patches via _in_eval). Belt-and-braces with the
         # ContextVar guard above.
-        if (span.attributes or {}).get("peekr.internal"):
+        if attrs.get("peekr.internal"):
+            return
+
+        # Evaluate a span if it declares an LLM origin (legacy provider
+        # prefixes — keeps evaluators like NotEmpty/NoError that must inspect a
+        # span *regardless* of output working) OR if it produced a free-text
+        # `output`. The output branch is what makes coverage provider-agnostic:
+        # it picks up Gemini (`gemini.*`) and custom-named generation spans
+        # (e.g. `rag.answer`) that the prefix list alone silently dropped —
+        # which is why Gemini-primary workloads were going unscored.
+        output = attrs.get("output")
+        has_output = isinstance(output, str) and bool(output.strip())
+        is_llm = any(span.name.startswith(p) for p in _LLM_PREFIXES)
+        if not (is_llm or has_output):
             return
 
         # Per-span filter — lets users scope evaluation to a subset of spans

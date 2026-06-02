@@ -16,6 +16,7 @@ from . import guard
 from . import prompts
 from .middleware import FastAPIMiddleware, PeekrASGIMiddleware  # noqa: F401
 from .harnesses.rag import instrument_rag
+from .evidence import record_evidence, clear_evidence, evidence  # noqa: F401
 from .patches.openai_patch import patch_openai
 from .patches.anthropic_patch import patch_anthropic
 from .patches.bedrock_patch import patch_bedrock
@@ -178,4 +179,6 @@ __all__ = [
     "PeekrASGIMiddleware",
     # harnesses
     "instrument_rag",
+    # evidence ("why did the AI say that?")
+    "record_evidence", "clear_evidence", "evidence",
 ]

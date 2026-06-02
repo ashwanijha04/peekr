@@ -7,17 +7,30 @@ from collections import defaultdict
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: peekr <command> [options]")
-        print("Commands: view, replay, cost, dashboard")
+        _print_help()
         sys.exit(1)
 
     cmd = sys.argv[1]
-    if cmd == "view":
+    if cmd == "login":
+        _cmd_login(sys.argv[2:])
+    elif cmd == "init":
+        _cmd_init(sys.argv[2:])
+    elif cmd == "deploy":
+        _cmd_deploy(sys.argv[2:])
+    elif cmd == "status":
+        _cmd_status(sys.argv[2:])
+    elif cmd in ("traces", "view"):
         args = sys.argv[2:]
+        if cmd == "traces" and "--open" not in args:
+            args = args + ["--open"]
         show_io = "--io" in args
+        open_browser = "--open" in args
         args = [a for a in args if not a.startswith("--")]
         path = args[0] if args else _default_path()
-        view_traces(path, show_io=show_io)
+        if open_browser:
+            _cmd_traces_browser(path)
+        else:
+            view_traces(path, show_io=show_io)
     elif cmd == "replay":
         _cmd_replay(sys.argv[2:])
     elif cmd == "cost":
@@ -28,8 +41,501 @@ def main():
     elif cmd == "dashboard":
         _cmd_dashboard(sys.argv[2:])
     else:
-        print(f"Unknown command: {cmd}")
+        print(f"Unknown command: {cmd!r}")
+        _print_help()
         sys.exit(1)
+
+
+def _print_help() -> None:
+    print("Usage: peekr <command> [options]")
+    print()
+    print("Cloud commands:")
+    print("  login              Open browser to sign in (only time you need the browser)")
+    print("  init               Scaffold peekr.yaml from current cloud state")
+    print("  deploy [file]      Push peekr.yaml to Peekr Cloud  (default: ./peekr.yaml)")
+    print("  status             Show what's deployed for this project")
+    print()
+    print("Local trace commands:")
+    print("  traces [file]      Open local traces in browser dashboard")
+    print("  view [file]        Print local traces in terminal")
+    print("  cost [file]        Summarise token costs")
+    print("  replay <trace_id>  Replay a recorded trace")
+    print("  dashboard [file]   Generate static HTML report")
+
+
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+
+def _config_path() -> str:
+    import os
+    return os.path.expanduser("~/.config/peekr/config.json")
+
+
+def _load_config() -> dict:
+    import os
+    p = _config_path()
+    if os.path.exists(p):
+        with open(p) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_config(data: dict) -> None:
+    import os
+    p = _config_path()
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _api_key_from_env_or_config(config: dict | None = None) -> str | None:
+    import os
+    k = os.environ.get("PEEKR_API_KEY")
+    if k:
+        return k
+    c = config or _load_config()
+    return c.get("api_key")
+
+
+def _endpoint_from_env_or_config(config: dict | None = None) -> str:
+    import os
+    e = os.environ.get("PEEKR_ENDPOINT")
+    if e:
+        return e.rstrip("/")
+    c = config or _load_config()
+    return c.get("endpoint", "https://peekr.starkspherelabs.com").rstrip("/")
+
+
+# ── peekr login ───────────────────────────────────────────────────────────────
+
+def _cmd_login(args: list[str]) -> None:
+    """
+    peekr login [--key pk_live_...]
+
+    With --key: save the API key directly (CI-friendly, no browser).
+    Without --key: open the dashboard so you can copy your key, then prompt.
+    """
+    import os
+
+    # Allow passing key directly (CI / agent-friendly)
+    key = None
+    i = 0
+    while i < len(args):
+        if args[i] in ("--key", "-k") and i + 1 < len(args):
+            key = args[i + 1]
+            i += 2
+        else:
+            i += 1
+
+    if not key:
+        url = "https://peekr.starkspherelabs.com/dashboard"
+        print(f"Opening {url} …")
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
+        print()
+        print("Copy your API key from Settings → API Keys, then paste it here.")
+        print("(or run:  peekr login --key pk_live_...)")
+        print()
+        key = input("API key: ").strip()
+
+    if not key.startswith("pk_"):
+        print("✗ That doesn't look like a Peekr API key (should start with pk_)")
+        sys.exit(1)
+
+    # Verify the key works
+    endpoint = _endpoint_from_env_or_config()
+    try:
+        import urllib.request, urllib.error
+        req = urllib.request.Request(
+            f"{endpoint}/api/v1/status",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        project_id = data.get("project_id", "unknown")
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            print("✗ Invalid API key — check your key and try again.")
+        else:
+            print(f"✗ Server error: HTTP {e.code}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ Could not reach {endpoint}: {e}")
+        sys.exit(1)
+
+    cfg = _load_config()
+    cfg["api_key"] = key
+    cfg["endpoint"] = endpoint
+    _save_config(cfg)
+
+    print(f"✓ Logged in  (project: {project_id})")
+    print(f"  Config saved to {_config_path()}")
+    print()
+    print("Next steps:")
+    print("  peekr init       # scaffold peekr.yaml from current cloud state")
+    print("  peekr deploy     # push peekr.yaml to Peekr Cloud")
+
+
+# ── peekr init ────────────────────────────────────────────────────────────────
+
+def _cmd_init(args: list[str]) -> None:
+    """
+    peekr init [--out peekr.yaml]
+
+    Pull the current project state from Peekr Cloud and write peekr.yaml.
+    Safe to re-run — won't overwrite an existing file without --force.
+    """
+    import os, urllib.request, urllib.error
+
+    out_path = "peekr.yaml"
+    force = False
+    i = 0
+    while i < len(args):
+        if args[i] in ("--out", "-o") and i + 1 < len(args):
+            out_path = args[i + 1]; i += 2
+        elif args[i] == "--force":
+            force = True; i += 1
+        else:
+            i += 1
+
+    if os.path.exists(out_path) and not force:
+        print(f"✗ {out_path} already exists. Use --force to overwrite.")
+        sys.exit(1)
+
+    cfg = _load_config()
+    api_key = _api_key_from_env_or_config(cfg)
+    if not api_key:
+        print("✗ Not logged in. Run:  peekr login")
+        sys.exit(1)
+
+    endpoint = _endpoint_from_env_or_config(cfg)
+    status = _fetch_status(api_key, endpoint)
+
+    lines = [
+        "# peekr.yaml — declarative config for Peekr Cloud",
+        "# Edit and run `peekr deploy` to push changes.",
+        "# Docs: https://peekr.starkspherelabs.com/docs",
+        "",
+        f"project: {status.get('project_id', 'YOUR_PROJECT_SLUG')}",
+        "",
+    ]
+
+    # Prompts
+    lines.append("prompts:")
+    prompts = status.get("prompts", [])
+    if not prompts:
+        lines += [
+            "  # example-prompt:",
+            "  #   description: What this prompt does",
+            "  #   model: gpt-4o-mini",
+            "  #   temperature: 0.3",
+            "  #   content: |",
+            "  #     You are a helpful assistant. {{user_name}}",
+        ]
+    for p in prompts:
+        lines.append(f"  {p['name']}:")
+        if p.get("description"):
+            lines.append(f"    description: {json.dumps(p['description'])}")
+        if p.get("model"):
+            lines.append(f"    model: {p['model']}")
+        lines.append(f"    # version: {p.get('active_version', 1)} (last deployed)")
+        lines.append(f"    content: |")
+        lines.append(f"      # fetch from dashboard to populate")
+    lines.append("")
+
+    # Guardrails
+    lines.append("guardrails:")
+    guardrails = status.get("guardrails", [])
+    if not guardrails:
+        lines += [
+            "  # - name: PII — Email",
+            "  #   type: blocked_pattern",
+            "  #   value: '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+'",
+            "  #   action: redact",
+            "  #   fields: [input, output]",
+        ]
+    for g in guardrails:
+        lines += [
+            f"  - name: {json.dumps(g['name'])}",
+            f"    type: {g['rule_type']}",
+            f"    value: {json.dumps(g['value'])}",
+            f"    action: {g['action']}",
+            f"    fields: {json.dumps(g.get('fields', ['output']))}",
+            f"    enabled: {str(g.get('enabled', True)).lower()}",
+        ]
+    lines.append("")
+
+    # Compliance
+    lines.append("compliance:")
+    packs = [c["name"] for c in status.get("compliance", [])]
+    if packs:
+        lines.append(f"  packs: {json.dumps(packs)}")
+    else:
+        lines.append("  packs: []  # e.g. [HIPAA, FDCPA, GDPR]")
+
+    with open(out_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    print(f"✓ Wrote {out_path}")
+    print(f"  {len(prompts)} prompt(s), {len(guardrails)} guardrail(s), {len(packs)} compliance pack(s)")
+    print()
+    print("Edit peekr.yaml then run:  peekr deploy")
+
+
+# ── peekr deploy ──────────────────────────────────────────────────────────────
+
+def _cmd_deploy(args: list[str]) -> None:
+    """
+    peekr deploy [peekr.yaml] [--dry-run]
+
+    Push the contents of peekr.yaml to Peekr Cloud.
+    Prompts and guardrails are upserted; unchanged items are skipped.
+    """
+    import os, urllib.request, urllib.error
+
+    path = "peekr.yaml"
+    dry_run = False
+    i = 0
+    while i < len(args):
+        if args[i] == "--dry-run":
+            dry_run = True; i += 1
+        elif not args[i].startswith("--"):
+            path = args[i]; i += 1
+        else:
+            i += 1
+
+    if not os.path.exists(path):
+        print(f"✗ {path} not found. Run `peekr init` to create one.")
+        sys.exit(1)
+
+    cfg = _load_config()
+    api_key = _api_key_from_env_or_config(cfg)
+    if not api_key:
+        print("✗ Not logged in. Run:  peekr login")
+        sys.exit(1)
+
+    endpoint = _endpoint_from_env_or_config(cfg)
+    payload = _parse_yaml(path)
+
+    prompt_count  = len(payload.get("prompts") or {})
+    guard_count   = len(payload.get("guardrails") or [])
+    pack_count    = len((payload.get("compliance") or {}).get("packs") or [])
+
+    print(f"  {path}  →  {endpoint}")
+    print(f"  {prompt_count} prompt(s)  ·  {guard_count} guardrail(s)  ·  {pack_count} compliance pack(s)")
+
+    if dry_run:
+        print()
+        print("Dry run — nothing sent.")
+        return
+
+    print()
+
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{endpoint}/api/v1/deploy",
+        data=data,
+        method="PUT",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:300]
+        print(f"✗ Deploy failed: HTTP {e.code}  {body}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ Could not reach {endpoint}: {e}")
+        sys.exit(1)
+
+    # Prompts
+    p = result.get("prompts", {})
+    for name in p.get("upserted", []):
+        print(f"  ✓ prompt   {name}  (updated)")
+    for name in p.get("unchanged", []):
+        print(f"  · prompt   {name}  (unchanged)")
+
+    # Guardrails
+    g = result.get("guardrails", {})
+    for name in g.get("upserted", []):
+        print(f"  ✓ guardrail  {name}  (updated)")
+    for name in g.get("unchanged", []):
+        print(f"  · guardrail  {name}  (unchanged)")
+
+    # Compliance
+    c = result.get("compliance", {})
+    for name in c.get("enabled", []):
+        print(f"  ✓ compliance  {name}  (enabled)")
+
+    total_changed = len(p.get("upserted", [])) + len(g.get("upserted", []))
+    print()
+    if total_changed:
+        print(f"Deploy complete  ({total_changed} change(s))")
+    else:
+        print("Already up to date.")
+
+
+# ── peekr status ──────────────────────────────────────────────────────────────
+
+def _cmd_status(args: list[str]) -> None:
+    """peekr status — show what's deployed for this project."""
+    cfg = _load_config()
+    api_key = _api_key_from_env_or_config(cfg)
+    if not api_key:
+        print("✗ Not logged in. Run:  peekr login")
+        sys.exit(1)
+
+    endpoint = _endpoint_from_env_or_config(cfg)
+    status = _fetch_status(api_key, endpoint)
+
+    print(f"Project: {status.get('project_id', '?')}")
+    print(f"Endpoint: {endpoint}")
+    print()
+
+    # Prompts
+    prompts = status.get("prompts", [])
+    print(f"Prompts  ({len(prompts)})")
+    if prompts:
+        for p in prompts:
+            v = f"v{p['active_version']}" if p.get("active_version") else "no versions"
+            m = f"  [{p['model']}]" if p.get("model") else ""
+            updated = p.get("updated_at", "")[:10]
+            print(f"  {p['name']:<30} {v}{m}  updated {updated}")
+    else:
+        print("  (none — run `peekr deploy` to push prompts)")
+    print()
+
+    # Guardrails
+    guardrails = status.get("guardrails", [])
+    print(f"Guardrails  ({len(guardrails)})")
+    if guardrails:
+        for g in guardrails:
+            enabled = "on " if g.get("enabled") else "off"
+            print(f"  [{enabled}]  {g['name']:<38} {g['rule_type']}  →  {g['action']}")
+    else:
+        print("  (none)")
+    print()
+
+    # Compliance
+    packs = status.get("compliance", [])
+    print(f"Compliance packs  ({len(packs)})")
+    if packs:
+        for c in packs:
+            print(f"  {c['display_name']:<30} severity={c.get('severity','?')}  action={c['action']}")
+    else:
+        print("  (none enabled)")
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _cmd_traces_browser(path: str) -> None:
+    """Generate dashboard HTML and open it in the default browser."""
+    import os, tempfile, webbrowser
+    from .dashboard import generate_dashboard
+
+    out = os.path.join(tempfile.gettempdir(), "peekr_traces.html")
+    generate_dashboard(path, output=out)
+    webbrowser.open(f"file://{out}")
+    print(f"Traces opened  ({path})")
+    print(f"File: {out}")
+
+
+def _fetch_status(api_key: str, endpoint: str) -> dict:
+    import urllib.request, urllib.error
+    req = urllib.request.Request(
+        f"{endpoint}/api/v1/status",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            print("✗ Invalid API key. Run:  peekr login")
+        else:
+            print(f"✗ Server error: HTTP {e.code}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"✗ Could not reach {endpoint}: {e}")
+        sys.exit(1)
+
+
+def _parse_yaml(path: str) -> dict:
+    """
+    Minimal YAML parser for peekr.yaml — handles the subset we need
+    without requiring PyYAML as a dependency.
+    Falls back to PyYAML if installed.
+    """
+    try:
+        import yaml
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        return _normalise_yaml(data or {})
+    except ImportError:
+        pass
+
+    # Fallback: very small hand-rolled parser for peekr.yaml structure
+    with open(path) as f:
+        raw = f.read()
+
+    try:
+        import yaml as _y  # might be pyyaml under a different name
+        data = _y.safe_load(raw)
+        return _normalise_yaml(data or {})
+    except Exception:
+        pass
+
+    print("✗ PyYAML is not installed. Install it with:  pip install pyyaml")
+    print("  Then re-run peekr deploy.")
+    sys.exit(1)
+
+
+def _normalise_yaml(data: dict) -> dict:
+    """Convert peekr.yaml structure to the API payload shape."""
+    out: dict = {}
+
+    raw_prompts = data.get("prompts") or {}
+    if raw_prompts:
+        out["prompts"] = {}
+        for name, spec in raw_prompts.items():
+            if not spec or not spec.get("content"):
+                continue
+            out["prompts"][name] = {
+                "content":     spec["content"],
+                "description": spec.get("description"),
+                "model":       spec.get("model"),
+                "temperature": spec.get("temperature"),
+                "notes":       spec.get("notes"),
+            }
+
+    raw_guardrails = data.get("guardrails") or []
+    if raw_guardrails:
+        out["guardrails"] = []
+        for rule in raw_guardrails:
+            if not rule.get("name") or not rule.get("value"):
+                continue
+            out["guardrails"].append({
+                "name":    rule["name"],
+                "type":    rule.get("type", "blocked_pattern"),
+                "value":   str(rule["value"]),
+                "action":  rule.get("action", "warn"),
+                "fields":  rule.get("fields", ["output"]),
+                "enabled": rule.get("enabled", True),
+            })
+
+    compliance = data.get("compliance") or {}
+    packs = compliance.get("packs") or []
+    if packs:
+        out["compliance"] = {"packs": packs}
+
+    return out
 
 
 def _cmd_dashboard(args: list[str]) -> None:

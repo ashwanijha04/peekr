@@ -76,6 +76,97 @@ _DETAILED_PROMPT = (
     "CONTEXT:\n{context}\n\nOUTPUT:\n{output}"
 )
 
+_ATTRIBUTION_PROMPT = (
+    "You are a strict fact-checker performing SOURCE ATTRIBUTION (RAGAS "
+    "Faithfulness with grounding). CONTEXT is a NUMBERED list of evidence "
+    "chunks the model was given.\n"
+    "Step 1 — CLAIM DECOMPOSITION: split OUTPUT into atomic factual claims "
+    "(one subject, one predicate, one object). Ignore opinions, questions, and "
+    "restatements of the question.\n"
+    "Step 2 — ATTRIBUTION: for EACH claim assign exactly one verdict and the "
+    "responsible chunk numbers:\n"
+    "  - supported    — directly entailed by one or more chunks; put them in 'support'\n"
+    "  - contradicted — a chunk directly conflicts with the claim; put them in 'contradict'\n"
+    "  - unsupported  — no chunk addresses the claim ('support' and 'contradict' both empty)\n"
+    "Use ONLY chunk numbers that appear in CONTEXT. Return ONLY this JSON, no prose:\n"
+    '  {{"claims": [{{"text": "<claim>", "verdict": "<verdict>", '
+    '"support": [<int>, ...], "contradict": [<int>, ...]}}]}}\n'
+    "If OUTPUT has no factual claims, return {{\"claims\": []}}.\n\n"
+    "CONTEXT:\n{context}\n\nOUTPUT:\n{output}"
+)
+
+
+def _blame_for(verdict: str, support: list[int], contradict: list[int]) -> str:
+    """Route blame for a claim to the layer an engineer should fix.
+
+    - ``grounded``       — a chunk supports it; the answer is doing its job.
+    - ``contradicted``   — a retrieved chunk disagrees with the claim: the
+                           model contradicted its own source (a grounding /
+                           generation failure, not a retrieval one).
+    - ``not_in_context`` — nothing retrieved backs the claim: either the
+                           answer-bearing source was never retrieved (a
+                           retrieval miss) or the model fabricated it. We
+                           cannot tell those apart from the trace alone, so we
+                           label honestly rather than overclaim "retrieval miss".
+    """
+    if verdict == "contradicted" or contradict:
+        return "contradicted"
+    if verdict == "supported" and support:
+        return "grounded"
+    return "not_in_context"
+
+
+def _parse_attributed_claims(text: str, n_chunks: int) -> list[dict]:
+    """Parse the attribution judge output into claims with chunk references."""
+    if not text:
+        raise ValueError("Empty judge output")
+    match = _JSON_OBJECT_RE.search(text)
+    if not match:
+        raise ValueError(f"No JSON object in judge output: {text!r}")
+    blob = json.loads(match.group(0))
+    raw = blob.get("claims", [])
+    if not isinstance(raw, list):
+        raise ValueError(f"'claims' is not a list: {raw!r}")
+
+    def _refs(value) -> list[int]:
+        out: list[int] = []
+        if isinstance(value, list):
+            for v in value:
+                try:
+                    iv = int(v)
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= iv <= n_chunks and iv not in out:
+                    out.append(iv)
+        return out
+
+    cleaned: list[dict] = []
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        claim_text = str(c.get("text", "")).strip()
+        if not claim_text:
+            continue
+        verdict = str(c.get("verdict", "")).strip().lower()
+        if verdict not in _VALID_VERDICTS:
+            verdict = "unsupported"
+        support = _refs(c.get("support"))
+        contradict = _refs(c.get("contradict"))
+        # Reconcile verdict with the attribution so the blame tag is consistent
+        # even when the judge labels loosely.
+        if contradict and verdict != "contradicted":
+            verdict = "contradicted"
+        elif support and verdict == "unsupported":
+            verdict = "supported"
+        cleaned.append({
+            "text": claim_text,
+            "verdict": verdict,
+            "support": support,
+            "contradict": contradict,
+            "blame": _blame_for(verdict, support, contradict),
+        })
+    return cleaned
+
 
 class Hallucination(BaseEvaluator):
     """LLM-as-judge evaluator that scores how well an output is grounded in its context.
@@ -156,6 +247,17 @@ class Hallucination(BaseEvaluator):
             )
             return 1.0
 
+        # Evidence-based attribution — if addressable chunks were recorded for
+        # this request via peekr.record_evidence(), link each atomic claim to
+        # the specific chunk(s) that support or contradict it. This is the
+        # "why did the AI say that?" path; it supersedes the blob-context
+        # faithfulness score because it produces the evidence edge, not just a
+        # number.
+        from ..evidence import get_evidence
+        chunks = get_evidence()
+        if chunks:
+            return self._evaluate_with_attribution(chunks, output, span)
+
         if self.context_extractor is not None:
             context = self.context_extractor(span)
         else:
@@ -204,6 +306,44 @@ class Hallucination(BaseEvaluator):
             "unsupported": counts["unsupported"],
             "total": total,
             "score": score,
+        }
+        return score
+
+    # ------------------------------------------------------------------
+    # Attribution mode — claim → evidence-chunk edges ("why did it say that?")
+    # ------------------------------------------------------------------
+
+    def _evaluate_with_attribution(
+        self,
+        chunks: list[dict],
+        output: str,
+        span: "Span",
+    ) -> float:
+        from ..evidence import format_for_judge
+
+        # Always persist the evidence chunks, even if the judge later fails —
+        # the dashboard can show "what the model was given" regardless.
+        span.attributes["evidence_chunks"] = chunks
+
+        context = format_for_judge(chunks)
+        prompt = _ATTRIBUTION_PROMPT.format(context=context, output=output)
+        text = self._judge(prompt, max_tokens=1500, fallback='{"claims": []}')
+        claims = _parse_attributed_claims(text, len(chunks))
+
+        counts = {v: 0 for v in _VALID_VERDICTS}
+        for c in claims:
+            counts[c["verdict"]] += 1
+        total = len(claims)
+        score = (counts["supported"] / total) if total > 0 else 1.0
+
+        span.attributes["hallucination_details"] = {
+            "claims": claims,
+            "supported": counts["supported"],
+            "contradicted": counts["contradicted"],
+            "unsupported": counts["unsupported"],
+            "total": total,
+            "score": score,
+            "attributed": True,
         }
         return score
 
