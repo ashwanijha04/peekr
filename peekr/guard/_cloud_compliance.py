@@ -73,17 +73,19 @@ class CloudComplianceGuard:
         if action not in ("raise", "warn"):
             raise ValueError(f"action must be 'raise' or 'warn'; got {action!r}")
 
-        self.action  = action
-        self._blocks = (action == "raise")
-        self._packs  = packs
+        self.action   = action
+        self._blocks  = (action == "raise")
+        self._packs   = packs
+        self._api_key = api_key
+        self._endpoint = endpoint.rstrip("/")
+        self._timeout  = timeout
+        self._rules_loaded = False
 
-        # Fetch rules once at construction time
-        self._output_rules:  list[tuple[re.Pattern, str, str]] = []  # (pattern, description, pack)
+        # Populated on first use (lazy) so server startup is never blocked
+        self._output_rules:  list[tuple[re.Pattern, str, str]] = []
         self._input_rules:   list[tuple[re.Pattern, str, str]] = []
-        self._disclosures:   list[tuple[str, str, str]] = []          # (text, description, pack)
+        self._disclosures:   list[tuple[str, str, str]] = []
         self._pack_actions:  dict[str, str] = {}
-
-        self._fetch_rules(api_key, endpoint.rstrip("/"), timeout)
 
     @property
     def name(self) -> str:
@@ -114,11 +116,14 @@ class CloudComplianceGuard:
         packs_data  = data.get("packs", [])
         rules_data  = data.get("rules", [])
 
-        # Build pack→action map; filter by requested packs
+        # Build pack→action map; filter by requested packs.
+        # User-specified action is the ceiling — "warn" always wins over pack's "raise".
         for p in packs_data:
             name = p.get("name", "")
             if self._packs is None or name in self._packs:
-                self._pack_actions[name] = p.get("action", self.action)
+                pack_action = p.get("action", self.action)
+                # If the user asked for "warn", never escalate to "raise"
+                self._pack_actions[name] = self.action if self.action == "warn" else pack_action
 
         enabled_packs = set(self._pack_actions.keys())
 
@@ -151,6 +156,11 @@ class CloudComplianceGuard:
             f"across {len(enabled_packs)} pack(s): {', '.join(sorted(enabled_packs))}"
         )
 
+    def _ensure_rules(self) -> None:
+        if not self._rules_loaded:
+            self._fetch_rules(self._api_key, self._endpoint, self._timeout)
+            self._rules_loaded = True
+
     # ── Enforcement ───────────────────────────────────────────────────────────
 
     def _pack_action(self, pack: str) -> str:
@@ -158,6 +168,7 @@ class CloudComplianceGuard:
 
     def run(self, span: "Span") -> None:
         """Post-call: checks output patterns and required disclosures."""
+        self._ensure_rules()
         if not any(span.name.startswith(p) for p in _LLM_PREFIXES):
             return
 
@@ -202,6 +213,7 @@ class CloudComplianceGuard:
 
     def run_input(self, span: "Span") -> None:
         """Pre-call: checks input patterns (prohibited questions, etc.)."""
+        self._ensure_rules()
         if not self._input_rules:
             return
         prompt = span.attributes.get("input", "") or ""
