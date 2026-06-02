@@ -2,14 +2,16 @@
 
 # peekr
 
-**Observability and evaluation for AI agents.**
+**In-process observability, evaluation & compliance for AI agents.**
+
+No proxy · your data never leaves your stack · claim-level hallucination detection · HIPAA / FDCPA / FINRA / GDPR guardrails · MIT-licensed.
 
 [![PyPI](https://img.shields.io/pypi/v/peekr)](https://pypi.org/project/peekr/)
 [![CI](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml/badge.svg)](https://github.com/ashwanijha04/peekr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
 
-[Website](https://ashwanijha04.github.io/peekr) · [Docs](https://ashwanijha04.github.io/peekr/docs.html) · [PyPI](https://pypi.org/project/peekr/) · [TypeScript SDK](peekr-ts/README.md)
+[Website](https://peekr.starkspherelabs.com) · [Docs](https://peekr.starkspherelabs.com/docs) · [PyPI](https://pypi.org/project/peekr/) · [TypeScript SDK](peekr-ts/README.md)
 
 </div>
 
@@ -597,6 +599,6 @@ Open an issue before large changes. PRs welcome.
 
 <div align="center">
 
-[Website](https://ashwanijha04.github.io/peekr) · [Docs](https://ashwanijha04.github.io/peekr/docs.html) · [PyPI](https://pypi.org/project/peekr/) · [TypeScript SDK](peekr-ts/README.md) · MIT License
+[Website](https://peekr.starkspherelabs.com) · [Docs](https://peekr.starkspherelabs.com/docs) · [PyPI](https://pypi.org/project/peekr/) · [TypeScript SDK](peekr-ts/README.md) · MIT License
 
 </div>

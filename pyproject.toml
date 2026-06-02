@@ -5,10 +5,30 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "peekr"
 version = "0.9.1"
-description = "Zero-config observability for AI agents"
+description = "In-process observability, evaluation & compliance guardrails for AI agents — no proxy, claim-level hallucination detection"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
+keywords = [
+    "llm", "llmops", "observability", "ai-agents", "agent-observability",
+    "tracing", "hallucination-detection", "guardrails", "ai-compliance",
+    "hipaa", "fdcpa", "finra", "gdpr", "evaluation", "llm-monitoring",
+    "openai", "anthropic", "langchain", "opentelemetry",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Monitoring",
+]
 dependencies = []
 
 [project.optional-dependencies]
@@ -48,8 +68,10 @@ all = [
 dev = ["pytest>=8.0", "opentelemetry-api>=1.20", "opentelemetry-sdk>=1.20"]
 
 [project.urls]
-Homepage = "https://ashwanijha04.github.io/peekr"
+Homepage = "https://peekr.starkspherelabs.com"
+Documentation = "https://peekr.starkspherelabs.com/docs"
 Repository = "https://github.com/ashwanijha04/peekr"
+Changelog = "https://github.com/ashwanijha04/peekr/blob/main/README.md#changelog"
 
 [project.scripts]
 peekr = "peekr.cli:main"
