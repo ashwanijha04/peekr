@@ -32,6 +32,10 @@ from .budget import BudgetAlert, BudgetExceededError, budget_alert
 
 _patched = False
 
+# Sentinel: user explicitly passed compliance=[] (disabled).
+# Distinct from compliance=None (auto-discover from dashboard).
+_COMPLIANCE_DISABLED = object()
+
 
 def instrument(
     exporter=None,
@@ -43,7 +47,7 @@ def instrument(
     evaluators: list = None,
     evaluate_filter=None,
     guardrails: list = None,
-    compliance: list | None = None,  # list of pack names, e.g. ["FDCPA", "HIPAA"]
+    compliance=None,  # None = auto-discover from dashboard | ["HIPAA"] = explicit | [] = disable
     tenant_id: str | None = None,
     retention_class: str | None = None,
     sample_rate: float | None = None,
@@ -92,6 +96,11 @@ def instrument(
     """
     global _patched
 
+    # Map compliance=[] (explicit empty list) to the disabled sentinel.
+    # compliance=None stays None → auto-discover.
+    if compliance is not None and isinstance(compliance, list) and len(compliance) == 0:
+        compliance = _COMPLIANCE_DISABLED
+
     set_process_defaults(
         tenant_id=tenant_id,
         retention_class=retention_class,
@@ -133,20 +142,33 @@ def instrument(
         add_exporter(budget_alert)
 
     # 4b) Cloud compliance guardrails — fetched from Peekr Cloud, enforced locally.
-    #     Merged into the guardrails pipeline so they benefit from the same
-    #     pre-storage mutating / post-storage blocking split.
-    if compliance and exporter is not None:
+    #
+    # Three modes:
+    #   compliance not passed (default)  → auto-discover: fetch all packs enabled
+    #                                       in the dashboard for this project
+    #   compliance=["HIPAA", "FDCPA"]    → enforce exactly those packs
+    #   compliance=[]                    → explicitly disabled, skip entirely
+    #
+    # "Auto" is the recommended default — the dashboard becomes the single
+    # source of truth and no code change is needed when you toggle a pack.
+    _should_add_compliance = (
+        exporter is not None
+        and compliance is not _COMPLIANCE_DISABLED
+        and getattr(exporter, "api_key", None)
+    )
+    if _should_add_compliance:
         from .guard._cloud_compliance import CloudComplianceGuard
-        # Extract api_key + endpoint from HTTPExporter if present
         _api_key  = getattr(exporter, "api_key",  None)
         _endpoint = getattr(exporter, "endpoint", "https://peekr.starkspherelabs.com")
-        if _api_key:
-            _cg = CloudComplianceGuard(
-                api_key=_api_key,
-                endpoint=_endpoint,
-                packs=compliance,
-            )
-            # Prepend so compliance sees the raw output before PIIRedact runs
+        # compliance=None → auto (packs=None means "all enabled in dashboard")
+        # compliance=[...] → explicit list passed through
+        _packs = compliance if compliance is not None else None
+        _cg = CloudComplianceGuard(
+            api_key=_api_key,
+            endpoint=_endpoint,
+            packs=_packs,
+        )
+        if True:  # keep indent for the prepend line below
             guardrails = [_cg] + list(guardrails or [])
 
     # 5) Storage — span is fully annotated (redacted + scored) by now.

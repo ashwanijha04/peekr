@@ -38,6 +38,8 @@ def main():
         args = [a for a in args if not a.startswith("--")]
         path = args[0] if args else _default_path()
         _cmd_cost(path)
+    elif cmd == "compliance":
+        _cmd_compliance(sys.argv[2:])
     elif cmd == "dashboard":
         _cmd_dashboard(sys.argv[2:])
     else:
@@ -54,6 +56,9 @@ def _print_help() -> None:
     print("  init               Scaffold peekr.yaml from current cloud state")
     print("  deploy [file]      Push peekr.yaml to Peekr Cloud  (default: ./peekr.yaml)")
     print("  status             Show what's deployed for this project")
+    print("  compliance list    Show enabled compliance packs")
+    print("  compliance enable  <PACK> [--action raise|warn]  Enable a pack")
+    print("  compliance disable <PACK>                        Disable a pack")
     print()
     print("Local trace commands:")
     print("  traces [file]      Open local traces in browser dashboard")
@@ -434,6 +439,104 @@ def _cmd_status(args: list[str]) -> None:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _cmd_compliance(args: list[str]) -> None:
+    """
+    peekr compliance list
+    peekr compliance enable  <PACK> [--action raise|warn]
+    peekr compliance disable <PACK>
+    """
+    import urllib.request, urllib.error
+
+    if not args or args[0] in ("list", "ls"):
+        cfg = _load_config()
+        api_key = _api_key_from_env_or_config(cfg)
+        if not api_key:
+            print("✗ Not logged in. Run:  peekr login")
+            sys.exit(1)
+        endpoint = _endpoint_from_env_or_config(cfg)
+        status = _fetch_status(api_key, endpoint)
+        packs = status.get("compliance", [])
+        print(f"Compliance packs ({len(packs)} enabled)\n")
+        if not packs:
+            print("  None enabled.")
+            print()
+            print("Enable one:  peekr compliance enable HIPAA")
+        else:
+            for p in packs:
+                print(f"  ✓  {p['display_name']:<32} action={p['action']}")
+        return
+
+    subcmd = args[0]  # enable | disable
+    if subcmd not in ("enable", "disable"):
+        print(f"Unknown compliance subcommand: {subcmd!r}")
+        print("  peekr compliance list")
+        print("  peekr compliance enable  <PACK> [--action raise|warn]")
+        print("  peekr compliance disable <PACK>")
+        sys.exit(1)
+
+    rest = args[1:]
+    if not rest or rest[0].startswith("--"):
+        print(f"Usage: peekr compliance {subcmd} <PACK_NAME>")
+        print("Example packs: HIPAA, FDCPA, FINRA, GDPR, UAE_PDPL, UAE_DHA, KSA_PDPL")
+        sys.exit(1)
+
+    pack_name = rest[0].upper()
+    action = "raise"
+    for i, a in enumerate(rest[1:]):
+        if a == "--action" and i + 1 < len(rest) - 1:
+            action = rest[i + 2]
+
+    cfg = _load_config()
+    api_key = _api_key_from_env_or_config(cfg)
+    if not api_key:
+        print("✗ Not logged in. Run:  peekr login")
+        sys.exit(1)
+    endpoint = _endpoint_from_env_or_config(cfg)
+
+    if subcmd == "enable":
+        payload = {"compliance": {"packs": [pack_name]}}
+        # Use the deploy endpoint — it upserts packs
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            f"{endpoint}/api/v1/deploy",
+            data=data,
+            method="PUT",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                result = json.loads(resp.read())
+            enabled = result.get("compliance", {}).get("enabled", [])
+            if pack_name in enabled or pack_name.upper() in [e.upper() for e in enabled]:
+                print(f"✓ {pack_name} enabled  (action={action})")
+                print(f"  Your SDK will pick this up automatically on next startup.")
+                print(f"  No code change needed — compliance is auto-discovered.")
+            else:
+                print(f"⚠ Pack '{pack_name}' not found. Check the pack name.")
+                print("  Available: HIPAA, FDCPA, FINRA, GDPR, EU_AI_ACT, UAE_PDPL, UAE_DHA,")
+                print("             UAE_CBUAE, UAE_RERA, KSA_PDPL, UAE_DIFC, TCPA, UPL, EEOC_ADA")
+        except urllib.error.HTTPError as e:
+            print(f"✗ Error: HTTP {e.code}  {e.read().decode()[:200]}")
+            sys.exit(1)
+
+    else:  # disable
+        # DELETE from project_compliance via deploy with empty packs (workaround: use compliance API)
+        req = urllib.request.Request(
+            f"{endpoint}/api/v1/compliance",
+            data=json.dumps({"pack": pack_name, "enabled": False}).encode(),
+            method="PUT",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                json.loads(resp.read())
+            print(f"✓ {pack_name} disabled")
+            print(f"  Changes take effect on next SDK startup.")
+        except urllib.error.HTTPError as e:
+            print(f"✗ Error: HTTP {e.code}  {e.read().decode()[:200]}")
+            sys.exit(1)
+
 
 def _cmd_traces_browser(path: str) -> None:
     """Generate dashboard HTML and open it in the default browser."""
