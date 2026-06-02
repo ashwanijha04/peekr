@@ -24,6 +24,11 @@ from .patches.gemini_patch import patch_gemini
 from .patches.langchain_patch import patch_langchain
 from .patches.llamaindex_patch import patch_llamaindex
 from .patches.crewai_patch import patch_crewai
+from .patches.litellm_patch import patch_litellm
+from .patches.pinecone_patch import patch_pinecone
+from .patches.chroma_patch import patch_chroma
+from .patches.qdrant_patch import patch_qdrant
+from .budget import BudgetAlert, BudgetExceededError, budget_alert
 
 _patched = False
 
@@ -43,6 +48,7 @@ def instrument(
     retention_class: str | None = None,
     sample_rate: float | None = None,
     keep_errors: bool | None = None,
+    budget_alert=None,  # e.g. BudgetAlert(limit_usd=10.0, window="day")
 ):
     """
     Auto-instrument LLM SDKs (OpenAI, Anthropic, Bedrock) and agent
@@ -80,6 +86,9 @@ def instrument(
                           storage exporters respect sampling.
     keep_errors         → if True (default), errored spans are always
                           persisted even when their trace was sampled out.
+    budget_alert        → BudgetAlert(limit_usd=10.0) → warn at $8 (80%),
+                          raise BudgetExceededError at $10 (per day by default).
+                          e.g. budget_alert=BudgetAlert(10.0)
     """
     global _patched
 
@@ -117,6 +126,11 @@ def instrument(
     if alerts:
         from .alerts import AlertExporter
         add_exporter(AlertExporter(alerts))
+
+    # 4c) Budget alert — warn at 80% of limit, raise BudgetExceededError at limit.
+    if budget_alert:
+        from .budget import BudgetAlert
+        add_exporter(budget_alert)
 
     # 4b) Cloud compliance guardrails — fetched from Peekr Cloud, enforced locally.
     #     Merged into the guardrails pipeline so they benefit from the same
@@ -157,6 +171,10 @@ def instrument(
         patch_langchain()
         patch_llamaindex()
         patch_crewai()
+        patch_litellm()
+        patch_pinecone()
+        patch_chroma()
+        patch_qdrant()
         _patched = True
 
 
@@ -181,4 +199,6 @@ __all__ = [
     "instrument_rag",
     # evidence ("why did the AI say that?")
     "record_evidence", "clear_evidence", "evidence",
+    # budget
+    "BudgetAlert", "BudgetExceededError", "budget_alert",
 ]

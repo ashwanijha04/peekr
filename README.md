@@ -15,6 +15,17 @@
 
 ---
 
+## Changelog
+
+### v0.9.0
+
+- **LiteLLM auto-instrumentation** — `peekr[litellm]` patches LiteLLM's completion layer; all 100+ provider calls are traced automatically.
+- **Vector DB tracing** — `peekr[pinecone]`, `peekr[chroma]`, `peekr[qdrant]`, or `peekr[vectordb]` for all three; upsert/query latency and result counts appear as child spans.
+- **Budget alerts** — `BudgetAlert` lets you set per-run or per-tenant cost thresholds and fires a callback (or raises) when the limit is crossed.
+- **Trace export to Peekr Cloud** — `peekr.export(endpoint=...)` ships completed traces to the Peekr Cloud ingest endpoint for team-wide dashboards and retention.
+
+---
+
 Peekr captures every LLM call, tool call, and framework step in your agent — what was sent, what came back, how long it took, and what it cost. Two lines of code, no backend, no account.
 
 ```python
