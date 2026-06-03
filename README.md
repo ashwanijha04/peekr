@@ -51,6 +51,7 @@ That's it. Spans stream to `traces.jsonl` (or SQLite) and to your console. Inspe
 - [Storage](#storage)
 - [Supported clients](#supported-clients)
 - [TypeScript SDK](#typescript-sdk)
+- [MCP server](#mcp-server)
 - [Peekr Cloud](#peekr-cloud)
 - [How it works](#how-it-works)
 - [Contributing](#contributing)
@@ -544,6 +545,27 @@ await withSession(
 The TypeScript SDK writes the same JSONL schema as Python, so a Node app's traces work with `peekr view`, `peekr cost`, and `peekr dashboard` unchanged. Full reference → [`peekr-ts/README.md`](peekr-ts/README.md).
 
 ---
+
+## MCP server
+
+Expose your local Peekr traces to AI assistants and agents (Claude Desktop, IDEs, agent frameworks) over the [Model Context Protocol](https://modelcontextprotocol.io). The server is **read-only** — it never writes spans or sends data anywhere; it just lets an assistant query the traces Peekr already captured.
+
+```bash
+pip install "peekr[mcp]"
+peekr-mcp --db traces.db        # or: peekr-mcp --jsonl traces.jsonl
+```
+
+Point any MCP client at the `peekr-mcp` command. For Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "peekr": { "command": "peekr-mcp", "args": ["--db", "/path/to/traces.db"] }
+  }
+}
+```
+
+Tools exposed: `recent_traces`, `get_trace`, `worst_hallucinations`, `token_usage_by_model`, `error_spans`, and `search_spans` — so you can ask *"what were the worst hallucinations in the last run?"* or *"what's my token usage by model?"* straight from your assistant.
 
 ## Peekr Cloud
 
