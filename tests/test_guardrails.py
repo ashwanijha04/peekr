@@ -1,4 +1,5 @@
 """Tests for peekr.guard — PIIRedact and HallucinationBlock."""
+
 from __future__ import annotations
 
 import pytest
@@ -22,6 +23,7 @@ from peekr.context import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _llm_span(input_text="", output_text="", eval_scores=None) -> Span:
     span = Span(name="openai.chat.completions", trace_id="trace-test")
     span.attributes["input"] = input_text
@@ -37,8 +39,8 @@ def _tool_span() -> Span:
 
 # ── PIIRedact ─────────────────────────────────────────────────────────────────
 
-class TestPIIRedact:
 
+class TestPIIRedact:
     def test_redacts_email_from_output(self):
         guard = PIIRedact()
         span = _llm_span(output_text="Contact us at alice@example.com for help.")
@@ -69,7 +71,9 @@ class TestPIIRedact:
 
     def test_redacts_from_input_field(self):
         guard = PIIRedact(fields=("input",))
-        span = _llm_span(input_text="My email is bob@test.com", output_text="bob@test.com")
+        span = _llm_span(
+            input_text="My email is bob@test.com", output_text="bob@test.com"
+        )
         guard.run(span)
         assert "[EMAIL]" in span.attributes["input"]
         assert "bob@test.com" in span.attributes["output"]  # output not touched
@@ -118,8 +122,8 @@ class TestPIIRedact:
 
 # ── Blocklist ─────────────────────────────────────────────────────────────────
 
-class TestBlocklist:
 
+class TestBlocklist:
     # ── action="raise" ────────────────────────────────────────────────────────
 
     def test_raises_on_blocked_term_in_input(self):
@@ -223,7 +227,9 @@ class TestBlocklist:
 
     def test_common_secrets_catches_bearer_token(self):
         guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="redact")
-        span = _llm_span(input_text="Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9")
+        span = _llm_span(
+            input_text="Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+        )
         guard.run(span)
         assert "[BLOCKED]" in span.attributes["input"]
 
@@ -279,8 +285,8 @@ class TestBlocklist:
 
 # ── Blocklist in exporter pipeline ────────────────────────────────────────────
 
-class TestBlocklistInPipeline:
 
+class TestBlocklistInPipeline:
     def test_raise_blocklist_in_blocking_exporter(self):
         # output-only Blocklist has _input_guard=False → lives in blocking exporter
         guard = Blocklist(terms=["classified"], action="raise", fields=("output",))
@@ -307,8 +313,8 @@ class TestBlocklistInPipeline:
 
 # ── HallucinationBlock ────────────────────────────────────────────────────────
 
-class TestHallucinationBlock:
 
+class TestHallucinationBlock:
     def test_raises_when_score_below_threshold(self):
         guard = HallucinationBlock(threshold=0.5)
         span = _llm_span(eval_scores={"Hallucination": 0.3})
@@ -333,7 +339,9 @@ class TestHallucinationBlock:
         with pytest.raises(GuardrailError):
             guard.run(span)
         assert "guardrail_violations" in span.attributes
-        assert any("HallucinationBlock" in v for v in span.attributes["guardrail_violations"])
+        assert any(
+            "HallucinationBlock" in v for v in span.attributes["guardrail_violations"]
+        )
 
     def test_reuses_existing_eval_score(self):
         guard = HallucinationBlock(threshold=0.5)
@@ -372,7 +380,9 @@ class TestHallucinationBlock:
         guard._evaluator = mock_eval
         guard.run(span)  # must not raise
         assert "guardrail_warnings" in span.attributes
-        assert any("evaluator failed" in w for w in span.attributes["guardrail_warnings"])
+        assert any(
+            "evaluator failed" in w for w in span.attributes["guardrail_warnings"]
+        )
 
     def test_skips_non_llm_spans(self):
         guard = HallucinationBlock(threshold=0.5)
@@ -391,8 +401,8 @@ class TestHallucinationBlock:
 
 # ── Exporters ─────────────────────────────────────────────────────────────────
 
-class TestMutatingGuardrailExporter:
 
+class TestMutatingGuardrailExporter:
     def test_runs_non_blocking_guardrails(self):
         guard = PIIRedact()
         exp = _MutatingGuardrailExporter([guard])
@@ -416,7 +426,6 @@ class TestMutatingGuardrailExporter:
 
 
 class TestBlockingGuardrailExporter:
-
     def test_raises_guardrail_error(self):
         guard = HallucinationBlock(threshold=0.5)
         exp = _BlockingGuardrailExporter([guard])
@@ -461,6 +470,7 @@ class TestBlockingGuardrailExporter:
 
 
 # ── Pre-call input guard registry ────────────────────────────────────────────
+
 
 class TestInputGuardRegistry:
     """Tests for _run_input_guards and the pre-call hook mechanism."""
@@ -515,23 +525,37 @@ class TestInputGuardRegistry:
 
     def test_blocklist_input_guard_flag(self):
         # action="raise" + "input" in fields → _input_guard=True
-        assert Blocklist(terms=["x"], action="raise", fields=("input",))._input_guard is True
-        assert Blocklist(terms=["x"], action="raise", fields=("output",))._input_guard is False
-        assert Blocklist(terms=["x"], action="redact", fields=("input",))._input_guard is False
-        assert Blocklist(terms=["x"], action="warn",   fields=("input",))._input_guard is False
+        assert (
+            Blocklist(terms=["x"], action="raise", fields=("input",))._input_guard
+            is True
+        )
+        assert (
+            Blocklist(terms=["x"], action="raise", fields=("output",))._input_guard
+            is False
+        )
+        assert (
+            Blocklist(terms=["x"], action="redact", fields=("input",))._input_guard
+            is False
+        )
+        assert (
+            Blocklist(terms=["x"], action="warn", fields=("input",))._input_guard
+            is False
+        )
 
     def test_input_guard_excluded_from_blocking_exporter(self):
         # Blocklist with _input_guard=True should NOT appear in _BlockingGuardrailExporter
-        input_guard  = Blocklist(terms=["x"], action="raise", fields=("input",))
+        input_guard = Blocklist(terms=["x"], action="raise", fields=("input",))
         output_guard = Blocklist(terms=["x"], action="raise", fields=("output",))
         exp = _BlockingGuardrailExporter([input_guard, output_guard])
-        assert input_guard  not in exp.guardrails
+        assert input_guard not in exp.guardrails
         assert output_guard in exp.guardrails
 
     def test_pre_call_vs_post_call_separation(self):
         """Input guard fires pre-call; output guard fires post-call. Distinct phases."""
-        input_guard  = Blocklist(terms=["forbidden"], action="raise", fields=("input",))
-        output_guard = Blocklist(terms=["forbidden"], action="raise", fields=("output",))
+        input_guard = Blocklist(terms=["forbidden"], action="raise", fields=("input",))
+        output_guard = Blocklist(
+            terms=["forbidden"], action="raise", fields=("output",)
+        )
 
         register_input_guard(input_guard)
         exp = _BlockingGuardrailExporter([input_guard, output_guard])
@@ -547,9 +571,13 @@ class TestInputGuardRegistry:
             exp.export(span_out)
 
     def test_common_secrets_registered_as_input_guard(self):
-        guard = Blocklist(patterns=Blocklist.COMMON_SECRETS, action="raise", fields=("input",))
+        guard = Blocklist(
+            patterns=Blocklist.COMMON_SECRETS, action="raise", fields=("input",)
+        )
         register_input_guard(guard)
-        span = _llm_span(input_text="Use API key sk-proj-abcdefghijklmnopqrstuvwxyz1234")
+        span = _llm_span(
+            input_text="Use API key sk-proj-abcdefghijklmnopqrstuvwxyz1234"
+        )
         with pytest.raises(GuardrailError):
             _run_input_guards(span)
 
@@ -565,8 +593,8 @@ class TestInputGuardRegistry:
 
 # ── Integration: both guardrail types together ────────────────────────────────
 
-class TestGuardrailIntegration:
 
+class TestGuardrailIntegration:
     def test_pii_redacted_before_hallucination_check(self):
         # PIIRedact runs first; HallucinationBlock sees the redacted text
         pii = PIIRedact()

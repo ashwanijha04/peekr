@@ -2,16 +2,23 @@
 
 No real API keys needed: LLM calls are mocked at the HTTP layer.
 """
+
 from __future__ import annotations
 
 import unittest.mock as mock
 import pytest
 
 import peekr
-from peekr.harnesses.rag import RAGHarness, _rag_docs, _rag_context_extractor, _serialize_docs
+from peekr.harnesses.rag import (
+    RAGHarness,
+    _rag_docs,
+    _rag_context_extractor,
+    _serialize_docs,
+)
 
 
 # ── _serialize_docs ────────────────────────────────────────────────────────────
+
 
 class TestSerializeDocs:
     def test_string_passthrough(self):
@@ -36,10 +43,14 @@ class TestSerializeDocs:
         doc = mock.MagicMock()
         doc.page_content = "LangChain document content."
         del doc.text  # ensure page_content is used
-        type(doc).page_content = mock.PropertyMock(return_value="LangChain document content.")
+        type(doc).page_content = mock.PropertyMock(
+            return_value="LangChain document content."
+        )
+
         # Simplified: test with plain object
         class Doc:
             page_content = "LangChain document content."
+
         assert "LangChain document content." in _serialize_docs([Doc()])
 
     def test_none_returns_empty(self):
@@ -56,6 +67,7 @@ class TestSerializeDocs:
 
 
 # ── context_extractor ──────────────────────────────────────────────────────────
+
 
 class TestContextExtractor:
     def test_reads_from_context_var(self):
@@ -83,6 +95,7 @@ class TestContextExtractor:
 
 # ── RAGHarness decorators ──────────────────────────────────────────────────────
 
+
 class TestRetrieveDecorator:
     def setup_method(self):
         # Clear ContextVar between tests
@@ -91,10 +104,13 @@ class TestRetrieveDecorator:
     def _make_harness(self):
         # instrument_rag calls peekr.instrument() — use a no-op exporter
         captured = []
+
         class NullExporter:
             _is_storage = True
+
             def export(self, span):
                 captured.append(span)
+
         peekr.add_exporter(NullExporter())
         return RAGHarness(), captured
 
@@ -174,6 +190,7 @@ class TestRetrieveDecorator:
 
     def test_async_retrieve(self):
         import asyncio as _asyncio
+
         harness, captured = self._make_harness()
 
         @harness.retrieve
@@ -215,6 +232,7 @@ class TestHarnessContextManager:
 
 # ── instrument_rag integration ─────────────────────────────────────────────────
 
+
 class TestInstrumentRag:
     def test_returns_rag_harness(self):
         with mock.patch("peekr.instrument"):
@@ -231,6 +249,7 @@ class TestInstrumentRag:
 
     def test_wires_hallucination_eval(self):
         from peekr.eval.hallucination import Hallucination
+
         wired_evals = []
 
         def fake_instrument(*args, evaluators=None, **kwargs):
@@ -240,12 +259,14 @@ class TestInstrumentRag:
         with mock.patch("peekr.instrument", side_effect=fake_instrument):
             peekr.instrument_rag()
 
-        assert any(isinstance(e, Hallucination) for e in wired_evals), \
+        assert any(isinstance(e, Hallucination) for e in wired_evals), (
             "instrument_rag() must wire a Hallucination evaluator"
+        )
 
     def test_hallucination_uses_rag_context_extractor(self):
         from peekr.eval.hallucination import Hallucination
         from peekr.harnesses.rag import _rag_context_extractor
+
         wired_evals = []
 
         def fake_instrument(*args, evaluators=None, **kwargs):
@@ -256,5 +277,6 @@ class TestInstrumentRag:
             peekr.instrument_rag()
 
         hal = next(e for e in wired_evals if isinstance(e, Hallucination))
-        assert hal.context_extractor is _rag_context_extractor, \
+        assert hal.context_extractor is _rag_context_extractor, (
             "Hallucination must use _rag_context_extractor so it reads retrieved docs"
+        )

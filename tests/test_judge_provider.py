@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from peekr.eval import EvalExporter, _in_eval
+from peekr.eval import EvalExporter
 from peekr.eval._judge import (
     JudgeUnavailable,
     call_judge,
@@ -47,66 +47,86 @@ def _mock_anthropic_response(text: str = "0.7") -> MagicMock:
 # select_provider — env-key-aware
 # ---------------------------------------------------------------------------
 
+
 class TestSelectProvider:
     def test_prefers_anthropic_when_only_anthropic_key_is_set(self):
         """The original symptom: openai is importable (transitive dep) but no
         OPENAI_API_KEY. Selection must pick Anthropic."""
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("auto") == "anthropic"
 
     def test_prefers_openai_when_only_openai_key_is_set(self):
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-oai-test"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-oai-test"}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("auto") == "openai"
 
     def test_openai_wins_when_both_keys_are_set_for_back_compat(self):
-        with patch.dict(
-            os.environ,
-            {"OPENAI_API_KEY": "sk-1", "ANTHROPIC_API_KEY": "sk-2"},
-            clear=True,
-        ), patch("peekr.eval._judge.openai", MagicMock()), \
-           patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(
+                os.environ,
+                {"OPENAI_API_KEY": "sk-1", "ANTHROPIC_API_KEY": "sk-2"},
+                clear=True,
+            ),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("auto") == "openai"
 
     def test_falls_back_to_importable_sdk_when_no_env_keys(self):
         """Legacy code path — ambient auth (Azure cred provider, on-prem
         proxy, etc.) — should still work. openai wins the tie."""
-        with patch.dict(os.environ, {}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("auto") == "openai"
 
     def test_falls_back_to_anthropic_when_openai_unimportable(self):
-        with patch.dict(os.environ, {}, clear=True), \
-             patch("peekr.eval._judge.openai", None), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("peekr.eval._judge.openai", None),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("auto") == "anthropic"
 
     def test_raises_when_neither_sdk_is_installed(self):
-        with patch("peekr.eval._judge.openai", None), \
-             patch("peekr.eval._judge.anthropic", None):
+        with (
+            patch("peekr.eval._judge.openai", None),
+            patch("peekr.eval._judge.anthropic", None),
+        ):
             with pytest.raises(JudgeUnavailable):
                 select_provider("auto")
 
     def test_explicit_openai_requires_openai_sdk(self):
         with patch("peekr.eval._judge.openai", None):
-            with pytest.raises(JudgeUnavailable, match="openai package is not installed"):
+            with pytest.raises(
+                JudgeUnavailable, match="openai package is not installed"
+            ):
                 select_provider("openai")
 
     def test_explicit_anthropic_requires_anthropic_sdk(self):
         with patch("peekr.eval._judge.anthropic", None):
-            with pytest.raises(JudgeUnavailable, match="anthropic package is not installed"):
+            with pytest.raises(
+                JudgeUnavailable, match="anthropic package is not installed"
+            ):
                 select_provider("anthropic")
 
     def test_explicit_overrides_env_keys(self):
         """If the user says `judge_provider="anthropic"`, that wins even if
         OPENAI_API_KEY is set (and OPENAI is importable)."""
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-1"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk-1"}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             assert select_provider("anthropic") == "anthropic"
 
 
@@ -114,13 +134,16 @@ class TestSelectProvider:
 # call_judge — actual provider dispatch
 # ---------------------------------------------------------------------------
 
+
 class TestCallJudge:
     def test_uses_openai_when_selected(self):
         mock_oai = MagicMock()
         mock_oai.chat.completions.create.return_value = _mock_openai_response("0.83")
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk"}, clear=True), \
-             patch("peekr.eval._judge.openai", mock_oai), \
-             patch("peekr.eval._judge.anthropic", MagicMock()):
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk"}, clear=True),
+            patch("peekr.eval._judge.openai", mock_oai),
+            patch("peekr.eval._judge.anthropic", MagicMock()),
+        ):
             text = call_judge("Score this", max_tokens=10)
         assert text == "0.83"
         mock_oai.chat.completions.create.assert_called_once()
@@ -131,9 +154,11 @@ class TestCallJudge:
         mock_anth.Anthropic.return_value = mock_client
         mock_client.messages.create.return_value = _mock_anthropic_response("0.55")
 
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", mock_anth):
+        with (
+            patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant"}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", mock_anth),
+        ):
             text = call_judge("Score this")
         assert text == "0.55"
         mock_client.messages.create.assert_called_once()
@@ -143,8 +168,10 @@ class TestCallJudge:
         NOT swallow — the EvalExporter records it in eval_errors."""
         mock_oai = MagicMock()
         mock_oai.chat.completions.create.side_effect = RuntimeError("401 Unauthorized")
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "bad"}, clear=True), \
-             patch("peekr.eval._judge.openai", mock_oai):
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "bad"}, clear=True),
+            patch("peekr.eval._judge.openai", mock_oai),
+        ):
             with pytest.raises(RuntimeError, match="401 Unauthorized"):
                 call_judge("Score this")
 
@@ -152,6 +179,7 @@ class TestCallJudge:
 # ---------------------------------------------------------------------------
 # Hallucination + Rubric — judge_provider override flows through
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluatorOverride:
     def test_hallucination_judge_provider_forces_anthropic(self):
@@ -162,9 +190,15 @@ class TestEvaluatorOverride:
 
         # Critically: OPENAI_API_KEY is set AND openai SDK is importable, but
         # the explicit override picks Anthropic anyway.
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk", "ANTHROPIC_API_KEY": "sk-a"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", mock_anth):
+        with (
+            patch.dict(
+                os.environ,
+                {"OPENAI_API_KEY": "sk", "ANTHROPIC_API_KEY": "sk-a"},
+                clear=True,
+            ),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", mock_anth),
+        ):
             ev = Hallucination(judge_provider="anthropic")
             s = Span(name="openai.chat.completions", trace_id="t")
             s.attributes["input"] = "ctx"
@@ -179,9 +213,11 @@ class TestEvaluatorOverride:
         mock_anth.Anthropic.return_value = client
         client.messages.create.return_value = _mock_anthropic_response("0.6")
 
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk"}, clear=True), \
-             patch("peekr.eval._judge.openai", MagicMock()), \
-             patch("peekr.eval._judge.anthropic", mock_anth):
+        with (
+            patch.dict(os.environ, {"OPENAI_API_KEY": "sk"}, clear=True),
+            patch("peekr.eval._judge.openai", MagicMock()),
+            patch("peekr.eval._judge.anthropic", mock_anth),
+        ):
             ev = Rubric("Be concise", judge_provider="anthropic")
             s = Span(name="openai.chat.completions", trace_id="t")
             s.attributes["output"] = "fine"
@@ -192,6 +228,7 @@ class TestEvaluatorOverride:
 # ---------------------------------------------------------------------------
 # EvalExporter — distinguish crash from real 0.0
 # ---------------------------------------------------------------------------
+
 
 class _ConstantEvaluator:
     def __init__(self, score=1.0, name_override="const"):
@@ -234,7 +271,10 @@ class TestEvalExporterDistinguishesCrashFromZero:
     def test_real_zero_score_still_recorded(self):
         """We must not break the case where the evaluator legitimately
         returns 0.0 — that's a meaningful score, not an error."""
-        exporter = EvalExporter(async_eval=False, evaluators=[_ConstantEvaluator(score=0.0, name_override="legit_zero")])
+        exporter = EvalExporter(
+            async_eval=False,
+            evaluators=[_ConstantEvaluator(score=0.0, name_override="legit_zero")],
+        )
         s = Span(name="openai.chat.completions", trace_id="t")
         s.attributes["output"] = "garbage"
         s.finish()
@@ -247,7 +287,10 @@ class TestEvalExporterDistinguishesCrashFromZero:
         score must still be recorded."""
         exporter = EvalExporter(
             async_eval=False,
-            evaluators=[_CrashingEvaluator(), _ConstantEvaluator(score=0.9, name_override="ok")]
+            evaluators=[
+                _CrashingEvaluator(),
+                _ConstantEvaluator(score=0.9, name_override="ok"),
+            ],
         )
         s = Span(name="anthropic.messages", trace_id="t")
         s.finish()
@@ -260,30 +303,48 @@ class TestEvalExporterDistinguishesCrashFromZero:
 # Dashboard surfaces the errors
 # ---------------------------------------------------------------------------
 
+
 class TestDashboardCarriesEvalErrors:
     def test_rows_include_eval_errors_attribute(self):
         from peekr import dashboard as dash
-        spans = [{
-            "name": "openai.chat.completions",
-            "trace_id": "t", "span_id": "s", "parent_id": None,
-            "start_time": 0, "end_time": 1, "duration_ms": 1000,
-            "status": "ok",
-            "attributes": {
-                "input": "hi", "output": "hello",
-                "eval_errors": {"Hallucination": "RuntimeError: 401 Unauthorized"},
-            },
-        }]
+
+        spans = [
+            {
+                "name": "openai.chat.completions",
+                "trace_id": "t",
+                "span_id": "s",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
+                "status": "ok",
+                "attributes": {
+                    "input": "hi",
+                    "output": "hello",
+                    "eval_errors": {"Hallucination": "RuntimeError: 401 Unauthorized"},
+                },
+            }
+        ]
         rows = dash._rows(spans)
-        assert rows[0]["eval_errors"] == {"Hallucination": "RuntimeError: 401 Unauthorized"}
+        assert rows[0]["eval_errors"] == {
+            "Hallucination": "RuntimeError: 401 Unauthorized"
+        }
 
     def test_rows_for_healthy_span_have_empty_eval_errors(self):
         from peekr import dashboard as dash
-        spans = [{
-            "name": "openai.chat.completions",
-            "trace_id": "t", "span_id": "s", "parent_id": None,
-            "start_time": 0, "end_time": 1, "duration_ms": 1000,
-            "status": "ok",
-            "attributes": {"input": "hi", "output": "hello"},
-        }]
+
+        spans = [
+            {
+                "name": "openai.chat.completions",
+                "trace_id": "t",
+                "span_id": "s",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
+                "status": "ok",
+                "attributes": {"input": "hi", "output": "hello"},
+            }
+        ]
         rows = dash._rows(spans)
         assert rows[0]["eval_errors"] == {}

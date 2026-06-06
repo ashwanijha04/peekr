@@ -39,9 +39,9 @@ class _AnthropicStreamWrapper:
                 yield event
 
             if input_tokens or output_tokens:
-                self._span.attributes["tokens_input"]  = input_tokens
+                self._span.attributes["tokens_input"] = input_tokens
                 self._span.attributes["tokens_output"] = output_tokens
-                self._span.attributes["tokens_total"]  = input_tokens + output_tokens
+                self._span.attributes["tokens_total"] = input_tokens + output_tokens
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -99,6 +99,7 @@ def patch_anthropic():
         # appearing as duplicate cards in the worst-offenders panel.
         try:
             from ..eval import _in_eval as _peekr_in_eval
+
             if _peekr_in_eval.get():
                 span.attributes["peekr.internal"] = True
         except Exception:  # pragma: no cover
@@ -114,13 +115,22 @@ def patch_anthropic():
         # SQLite queries that already filter on it keep working.
         unified_messages: list = list(messages)
         if system:
-            sys_str = system if isinstance(system, str) else json.dumps(system, default=str)
-            unified_messages = [{"role": "system", "content": sys_str}, *unified_messages]
-            span.attributes["system"] = sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+            sys_str = (
+                system if isinstance(system, str) else json.dumps(system, default=str)
+            )
+            unified_messages = [
+                {"role": "system", "content": sys_str},
+                *unified_messages,
+            ]
+            span.attributes["system"] = (
+                sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+            )
 
         if unified_messages:
             prompt = json.dumps(unified_messages, default=str)
-            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            span.attributes["input"] = (
+                prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            )
 
         is_streaming = kwargs.get("stream", False)
 
@@ -133,12 +143,20 @@ def patch_anthropic():
 
             usage = getattr(result, "usage", None)
             if usage:
-                span.attributes["tokens_input"]  = usage.input_tokens
+                span.attributes["tokens_input"] = usage.input_tokens
                 span.attributes["tokens_output"] = usage.output_tokens
-                span.attributes["tokens_total"]  = usage.input_tokens + usage.output_tokens
+                span.attributes["tokens_total"] = (
+                    usage.input_tokens + usage.output_tokens
+                )
             if result.content:
-                output = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
-                span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                output = (
+                    result.content[0].text
+                    if hasattr(result.content[0], "text")
+                    else str(result.content[0])
+                )
+                span.attributes["output"] = (
+                    output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                )
             span.status = "ok"
             return result
         except GuardrailError:
@@ -169,6 +187,7 @@ def patch_anthropic():
             span.attributes["model"] = kwargs.get("model", "unknown")
             try:
                 from ..eval import _in_eval as _peekr_in_eval
+
                 if _peekr_in_eval.get():
                     span.attributes["peekr.internal"] = True
             except Exception:
@@ -178,12 +197,23 @@ def patch_anthropic():
             system = kwargs.get("system")
             unified_messages: list = list(messages)
             if system:
-                sys_str = system if isinstance(system, str) else json.dumps(system, default=str)
-                unified_messages = [{"role": "system", "content": sys_str}, *unified_messages]
-                span.attributes["system"] = sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+                sys_str = (
+                    system
+                    if isinstance(system, str)
+                    else json.dumps(system, default=str)
+                )
+                unified_messages = [
+                    {"role": "system", "content": sys_str},
+                    *unified_messages,
+                ]
+                span.attributes["system"] = (
+                    sys_str[:_TRUNCATE] + "…" if len(sys_str) > _TRUNCATE else sys_str
+                )
             if unified_messages:
                 prompt = json.dumps(unified_messages, default=str)
-                span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+                span.attributes["input"] = (
+                    prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+                )
 
             is_streaming = kwargs.get("stream", False)
             try:
@@ -192,12 +222,20 @@ def patch_anthropic():
                     return _AnthropicStreamWrapper(result, span, token)
                 usage = getattr(result, "usage", None)
                 if usage:
-                    span.attributes["tokens_input"]  = usage.input_tokens
+                    span.attributes["tokens_input"] = usage.input_tokens
                     span.attributes["tokens_output"] = usage.output_tokens
-                    span.attributes["tokens_total"]  = usage.input_tokens + usage.output_tokens
+                    span.attributes["tokens_total"] = (
+                        usage.input_tokens + usage.output_tokens
+                    )
                 if result.content:
-                    output = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
-                    span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                    output = (
+                        result.content[0].text
+                        if hasattr(result.content[0], "text")
+                        else str(result.content[0])
+                    )
+                    span.attributes["output"] = (
+                        output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                    )
                 span.status = "ok"
                 return result
             except Exception as e:

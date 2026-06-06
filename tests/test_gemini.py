@@ -7,10 +7,9 @@ What we verify here:
   - The text / usage extraction helpers handle both response shapes.
   - Patched calls produce a span with model + tokens captured.
 """
+
 from __future__ import annotations
 
-import sys
-import types
 from unittest.mock import MagicMock
 
 import pytest
@@ -101,7 +100,9 @@ class TestWrappedCall:
             resp.candidates = None
             return resp
 
-        wrapped = _wrap_generate(fake_generate, is_method=True, name="gemini.generate_content")
+        wrapped = _wrap_generate(
+            fake_generate, is_method=True, name="gemini.generate_content"
+        )
 
         class FakeModels:
             model_name = "gemini-2.0-flash"

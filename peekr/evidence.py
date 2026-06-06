@@ -25,6 +25,7 @@ Usage::
 plain strings) and flexible score/id keys, so it works without a translation
 layer in most pipelines.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -106,7 +107,15 @@ def normalize_chunk(item: Any, n: int) -> dict:
         "source_url": _get(item, "source_url", "url", "uri", "link"),
         # Prefer a reranker score, then fusion/semantic scores.
         "score": _coerce_float(
-            _get(item, "score", "rerank_score", "rrf_score", "relevance", "vec_similarity", "similarity")
+            _get(
+                item,
+                "score",
+                "rerank_score",
+                "rrf_score",
+                "relevance",
+                "vec_similarity",
+                "similarity",
+            )
         ),
         "rank": _get(item, "rank") or n,
     }
@@ -143,8 +152,8 @@ def clear_evidence() -> None:
 def evidence(chunks: Any):
     """Scope evidence to a block, clearing it on exit::
 
-        with peekr.evidence(hits):
-            answer = generate(...)
+    with peekr.evidence(hits):
+        answer = generate(...)
     """
     token = _evidence.set(record_evidence(chunks))
     try:

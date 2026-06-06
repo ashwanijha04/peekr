@@ -5,14 +5,13 @@ Sinks live on the trace write path, so two invariants matter most:
   2. They must NEVER raise out of `.notify()` — a flaky webhook should not
      break the application's tracing.
 """
+
 from __future__ import annotations
 
 import json
 import socket
 import threading
-import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from unittest.mock import patch
 
 import pytest
 
@@ -30,6 +29,7 @@ from peekr.alerts import (
 # ---------------------------------------------------------------------------
 # Tiny capturing HTTP server for end-to-end tests
 # ---------------------------------------------------------------------------
+
 
 class _CapturingHandler(BaseHTTPRequestHandler):
     received: list[tuple[str, dict, str]] = []  # (path, headers, body)
@@ -61,6 +61,7 @@ def http_capture():
 # 1. Constructor validation
 # ---------------------------------------------------------------------------
 
+
 class TestConstructors:
     def test_slack_requires_url(self):
         with pytest.raises(ValueError):
@@ -84,6 +85,7 @@ class TestConstructors:
 # ---------------------------------------------------------------------------
 # 2. Payload shape — end-to-end against a real local HTTP server
 # ---------------------------------------------------------------------------
+
 
 class TestSlackPayload:
     def test_slack_posts_text_payload(self, http_capture):
@@ -115,11 +117,17 @@ class TestWebhookPayload:
             return {
                 "routing_key": "test-key",
                 "event_action": "trigger",
-                "payload": {"summary": msg, "source": "peekr", "severity": "warning",
-                            "custom_details": {"alert": name}},
+                "payload": {
+                    "summary": msg,
+                    "source": "peekr",
+                    "severity": "warning",
+                    "custom_details": {"alert": name},
+                },
             }
 
-        WebhookSink(url=url, payload_builder=pagerduty_shape).notify("LatencyP95", "p95 9876ms")
+        WebhookSink(url=url, payload_builder=pagerduty_shape).notify(
+            "LatencyP95", "p95 9876ms"
+        )
 
         _, _, body = received[0]
         payload = json.loads(body)
@@ -142,6 +150,7 @@ class TestWebhookPayload:
 # ---------------------------------------------------------------------------
 # 3. Resilience — flaky sinks must never raise out of notify()
 # ---------------------------------------------------------------------------
+
 
 class TestResilience:
     def test_slack_silently_swallows_network_error(self):
@@ -188,6 +197,7 @@ class TestResilience:
 # 4. Alert-to-sink wiring
 # ---------------------------------------------------------------------------
 
+
 class TestAlertWiring:
     def test_alert_with_no_sinks_writes_to_stderr(self, capsys):
         a = ErrorRate(threshold=0.0, window=1)
@@ -226,10 +236,12 @@ class TestAlertWiring:
         """with_sinks() must extend, not replace, an already-set sinks list."""
 
         class _A(_BaseSink):
-            def notify(self, *_): pass
+            def notify(self, *_):
+                pass
 
         class _B(_BaseSink):
-            def notify(self, *_): pass
+            def notify(self, *_):
+                pass
 
         s = _A()
         t = _B()

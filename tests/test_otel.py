@@ -80,7 +80,6 @@ class TestLLMAttributes:
 
 class TestOTelExporter:
     def test_export_uses_in_memory_provider(self):
-        from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
@@ -96,6 +95,7 @@ class TestOTelExporter:
 
         # Build a peekr root span + child
         import time
+
         root = Span(
             name="agent.run",
             trace_id="t1",

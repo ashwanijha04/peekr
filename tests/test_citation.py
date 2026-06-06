@@ -21,6 +21,7 @@ def _span(input_text: str, output: str) -> Span:
 # Pattern extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractCitations:
     def test_extracts_urls(self):
         out = extract_citations("See https://example.com/paper.pdf for details.")
@@ -36,7 +37,9 @@ class TestExtractCitations:
         assert any(c["kind"] == "doi" for c in out)
 
     def test_extracts_author_year(self):
-        out = extract_citations("As shown by Vaswani et al. (2017) and Devlin et al. 2018.")
+        out = extract_citations(
+            "As shown by Vaswani et al. (2017) and Devlin et al. 2018."
+        )
         ay = [c for c in out if c["kind"] == "author_year"]
         assert len(ay) == 2
 
@@ -46,7 +49,9 @@ class TestExtractCitations:
         assert kinds.count("section") == 2
 
     def test_extracts_quoted_title(self):
-        out = extract_citations('See "Attention Is All You Need" for the original work.')
+        out = extract_citations(
+            'See "Attention Is All You Need" for the original work.'
+        )
         assert any(c["kind"] == "quoted_title" for c in out)
 
     def test_short_quoted_strings_are_ignored(self):
@@ -62,6 +67,7 @@ class TestExtractCitations:
 # ---------------------------------------------------------------------------
 # Evaluator semantics
 # ---------------------------------------------------------------------------
+
 
 class TestCitationAccuracy:
     def test_returns_one_when_no_citations(self):
@@ -109,8 +115,10 @@ class TestCitationAccuracy:
         assert CitationAccuracy().evaluate(s) == 1.0
 
     def test_writes_details_per_citation(self):
-        s = _span("Vaswani et al. 2017 published the original work.",
-                  "Vaswani et al. 2017 wrote it; Smith et al. 2025 extended it.")
+        s = _span(
+            "Vaswani et al. 2017 published the original work.",
+            "Vaswani et al. 2017 wrote it; Smith et al. 2025 extended it.",
+        )
         CitationAccuracy().evaluate(s)
         items = s.attributes["citation_details"]["items"]
         # First citation grounded, second invented
@@ -121,8 +129,10 @@ class TestCitationAccuracy:
         assert len(grounded) == 1 and len(invented) == 1
 
     def test_integration_via_eval_exporter(self):
-        s = _span("BERT is a transformer.",
-                  "BERT was introduced in arXiv:9999.99999 by Smith et al. 2025.")
+        s = _span(
+            "BERT is a transformer.",
+            "BERT was introduced in arXiv:9999.99999 by Smith et al. 2025.",
+        )
         exporter = EvalExporter(async_eval=False, evaluators=[CitationAccuracy()])
         exporter.export(s)
         assert s.attributes["eval_scores"]["CitationAccuracy"] == pytest.approx(0.0)
@@ -138,6 +148,7 @@ class TestCitationAccuracy:
 # Composability — Hallucination + CitationAccuracy run together
 # ---------------------------------------------------------------------------
 
+
 class TestComposedSignals:
     def test_both_signals_land_on_span(self):
         """Citation evaluator runs without an LLM, so the EvalExporter can include both."""
@@ -152,7 +163,9 @@ class TestComposedSignals:
         mock_resp.choices[0].message.content = "0.4"
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.return_value = mock_resp
-            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(), CitationAccuracy()])
+            exporter = EvalExporter(
+                async_eval=False, evaluators=[Hallucination(), CitationAccuracy()]
+            )
             exporter.export(s)
 
         scores = s.attributes["eval_scores"]

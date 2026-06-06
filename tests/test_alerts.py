@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-import pytest
 
 from peekr.alerts import (
     AlertExporter,
@@ -20,6 +19,7 @@ from peekr.span import Span
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_span(
     name: str = "test",
@@ -45,7 +45,9 @@ def _make_span(
 
 def _root_span(**kwargs) -> Span:
     """Create a real Span object with parent_id=None (root)."""
-    s = Span(name=kwargs.get("name", "root"), trace_id=kwargs.get("trace_id", "trace-1"))
+    s = Span(
+        name=kwargs.get("name", "root"), trace_id=kwargs.get("trace_id", "trace-1")
+    )
     s.attributes.update(kwargs.get("attributes", {}))
     s.status = kwargs.get("status", "ok")
     s.finish()
@@ -63,6 +65,7 @@ def _child_span(parent: Span, name: str = "child", **kwargs) -> Span:
 # ---------------------------------------------------------------------------
 # AlertExporter accumulation & dispatch
 # ---------------------------------------------------------------------------
+
 
 class _RecordingAlert(_BaseAlert):
     def __init__(self):
@@ -134,6 +137,7 @@ def test_exporter_multiple_traces_independent():
 # ---------------------------------------------------------------------------
 # ErrorRate
 # ---------------------------------------------------------------------------
+
 
 class _TriggerCapture(_BaseAlert):
     """Mixin that records trigger messages instead of printing."""
@@ -213,6 +217,7 @@ def test_error_rate_trace_with_mixed_spans():
 # CostSpike
 # ---------------------------------------------------------------------------
 
+
 def test_cost_spike_no_history_no_trigger():
     cs = _CostSpike(multiplier=2.0, window=10)
     cs.check([_make_span(tokens=1000)])
@@ -257,6 +262,7 @@ def test_cost_spike_uses_sum_of_tokens_across_spans():
 # ---------------------------------------------------------------------------
 # LatencyP95
 # ---------------------------------------------------------------------------
+
 
 def test_latency_p95_no_trigger_below_threshold():
     lp = _LatencyP95(ms=5000)
@@ -305,6 +311,7 @@ def test_latency_p95_ignores_none_duration():
 # ---------------------------------------------------------------------------
 # TokenGrowth
 # ---------------------------------------------------------------------------
+
 
 def test_token_growth_no_trigger_too_few_runs():
     tg = _TokenGrowth(runs=5)
@@ -356,16 +363,17 @@ def test_token_growth_resets_after_drop():
 def test_token_growth_sums_multiple_spans():
     tg = _TokenGrowth(runs=3)
     # each trace has two spans; growth is still detected
-    tg.check([_make_span(tokens=10), _make_span(tokens=10)])   # 20
-    tg.check([_make_span(tokens=20), _make_span(tokens=20)])   # 40
-    tg.check([_make_span(tokens=30), _make_span(tokens=30)])   # 60
-    tg.check([_make_span(tokens=40), _make_span(tokens=40)])   # 80
+    tg.check([_make_span(tokens=10), _make_span(tokens=10)])  # 20
+    tg.check([_make_span(tokens=20), _make_span(tokens=20)])  # 40
+    tg.check([_make_span(tokens=30), _make_span(tokens=30)])  # 60
+    tg.check([_make_span(tokens=40), _make_span(tokens=40)])  # 80
     assert tg.triggered
 
 
 # ---------------------------------------------------------------------------
 # alert namespace alias
 # ---------------------------------------------------------------------------
+
 
 def test_alert_namespace_has_all_types():
     assert alert.ErrorRate is ErrorRate
@@ -383,6 +391,7 @@ def test_alert_namespace_instantiable():
 # on_trigger default writes to stderr (smoke test)
 # ---------------------------------------------------------------------------
 
+
 def test_default_on_trigger_writes_to_stderr(capsys):
     base = _BaseAlert()
     base.on_trigger("hello alert")
@@ -393,6 +402,7 @@ def test_default_on_trigger_writes_to_stderr(capsys):
 # ---------------------------------------------------------------------------
 # Integration: AlertExporter with real Span objects
 # ---------------------------------------------------------------------------
+
 
 def test_alert_exporter_full_integration():
     triggered: list[str] = []

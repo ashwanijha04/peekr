@@ -52,9 +52,13 @@ def _print_help() -> None:
     print("Usage: peekr <command> [options]")
     print()
     print("Cloud commands:")
-    print("  login              Open browser to sign in (only time you need the browser)")
+    print(
+        "  login              Open browser to sign in (only time you need the browser)"
+    )
     print("  init               Scaffold peekr.yaml from current cloud state")
-    print("  deploy [file]      Push peekr.yaml to Peekr Cloud  (default: ./peekr.yaml)")
+    print(
+        "  deploy [file]      Push peekr.yaml to Peekr Cloud  (default: ./peekr.yaml)"
+    )
     print("  status             Show what's deployed for this project")
     print("  compliance list    Show enabled compliance packs")
     print("  compliance enable  <PACK> [--action raise|warn]  Enable a pack")
@@ -70,13 +74,16 @@ def _print_help() -> None:
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
+
 def _config_path() -> str:
     import os
+
     return os.path.expanduser("~/.config/peekr/config.json")
 
 
 def _load_config() -> dict:
     import os
+
     p = _config_path()
     if os.path.exists(p):
         with open(p) as f:
@@ -86,6 +93,7 @@ def _load_config() -> dict:
 
 def _save_config(data: dict) -> None:
     import os
+
     p = _config_path()
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w") as f:
@@ -94,6 +102,7 @@ def _save_config(data: dict) -> None:
 
 def _api_key_from_env_or_config(config: dict | None = None) -> str | None:
     import os
+
     k = os.environ.get("PEEKR_API_KEY")
     if k:
         return k
@@ -103,6 +112,7 @@ def _api_key_from_env_or_config(config: dict | None = None) -> str | None:
 
 def _endpoint_from_env_or_config(config: dict | None = None) -> str:
     import os
+
     e = os.environ.get("PEEKR_ENDPOINT")
     if e:
         return e.rstrip("/")
@@ -112,6 +122,7 @@ def _endpoint_from_env_or_config(config: dict | None = None) -> str:
 
 # ── peekr login ───────────────────────────────────────────────────────────────
 
+
 def _cmd_login(args: list[str]) -> None:
     """
     peekr login [--key pk_live_...]
@@ -119,7 +130,6 @@ def _cmd_login(args: list[str]) -> None:
     With --key: save the API key directly (CI-friendly, no browser).
     Without --key: open the dashboard so you can copy your key, then prompt.
     """
-    import os
 
     # Allow passing key directly (CI / agent-friendly)
     key = None
@@ -136,6 +146,7 @@ def _cmd_login(args: list[str]) -> None:
         print(f"Opening {url} …")
         try:
             import webbrowser
+
             webbrowser.open(url)
         except Exception:
             pass
@@ -152,7 +163,9 @@ def _cmd_login(args: list[str]) -> None:
     # Verify the key works
     endpoint = _endpoint_from_env_or_config()
     try:
-        import urllib.request, urllib.error
+        import urllib.request
+        import urllib.error
+
         req = urllib.request.Request(
             f"{endpoint}/api/v1/status",
             headers={"Authorization": f"Bearer {key}"},
@@ -185,6 +198,7 @@ def _cmd_login(args: list[str]) -> None:
 
 # ── peekr init ────────────────────────────────────────────────────────────────
 
+
 def _cmd_init(args: list[str]) -> None:
     """
     peekr init [--out peekr.yaml]
@@ -192,16 +206,18 @@ def _cmd_init(args: list[str]) -> None:
     Pull the current project state from Peekr Cloud and write peekr.yaml.
     Safe to re-run — won't overwrite an existing file without --force.
     """
-    import os, urllib.request, urllib.error
+    import os
 
     out_path = "peekr.yaml"
     force = False
     i = 0
     while i < len(args):
         if args[i] in ("--out", "-o") and i + 1 < len(args):
-            out_path = args[i + 1]; i += 2
+            out_path = args[i + 1]
+            i += 2
         elif args[i] == "--force":
-            force = True; i += 1
+            force = True
+            i += 1
         else:
             i += 1
 
@@ -246,8 +262,8 @@ def _cmd_init(args: list[str]) -> None:
         if p.get("model"):
             lines.append(f"    model: {p['model']}")
         lines.append(f"    # version: {p.get('active_version', 1)} (last deployed)")
-        lines.append(f"    content: |")
-        lines.append(f"      # fetch from dashboard to populate")
+        lines.append("    content: |")
+        lines.append("      # fetch from dashboard to populate")
     lines.append("")
 
     # Guardrails
@@ -284,12 +300,15 @@ def _cmd_init(args: list[str]) -> None:
         f.write("\n".join(lines) + "\n")
 
     print(f"✓ Wrote {out_path}")
-    print(f"  {len(prompts)} prompt(s), {len(guardrails)} guardrail(s), {len(packs)} compliance pack(s)")
+    print(
+        f"  {len(prompts)} prompt(s), {len(guardrails)} guardrail(s), {len(packs)} compliance pack(s)"
+    )
     print()
     print("Edit peekr.yaml then run:  peekr deploy")
 
 
 # ── peekr deploy ──────────────────────────────────────────────────────────────
+
 
 def _cmd_deploy(args: list[str]) -> None:
     """
@@ -298,16 +317,20 @@ def _cmd_deploy(args: list[str]) -> None:
     Push the contents of peekr.yaml to Peekr Cloud.
     Prompts and guardrails are upserted; unchanged items are skipped.
     """
-    import os, urllib.request, urllib.error
+    import os
+    import urllib.request
+    import urllib.error
 
     path = "peekr.yaml"
     dry_run = False
     i = 0
     while i < len(args):
         if args[i] == "--dry-run":
-            dry_run = True; i += 1
+            dry_run = True
+            i += 1
         elif not args[i].startswith("--"):
-            path = args[i]; i += 1
+            path = args[i]
+            i += 1
         else:
             i += 1
 
@@ -324,12 +347,14 @@ def _cmd_deploy(args: list[str]) -> None:
     endpoint = _endpoint_from_env_or_config(cfg)
     payload = _parse_yaml(path)
 
-    prompt_count  = len(payload.get("prompts") or {})
-    guard_count   = len(payload.get("guardrails") or [])
-    pack_count    = len((payload.get("compliance") or {}).get("packs") or [])
+    prompt_count = len(payload.get("prompts") or {})
+    guard_count = len(payload.get("guardrails") or [])
+    pack_count = len((payload.get("compliance") or {}).get("packs") or [])
 
     print(f"  {path}  →  {endpoint}")
-    print(f"  {prompt_count} prompt(s)  ·  {guard_count} guardrail(s)  ·  {pack_count} compliance pack(s)")
+    print(
+        f"  {prompt_count} prompt(s)  ·  {guard_count} guardrail(s)  ·  {pack_count} compliance pack(s)"
+    )
 
     if dry_run:
         print()
@@ -389,6 +414,7 @@ def _cmd_deploy(args: list[str]) -> None:
 
 # ── peekr status ──────────────────────────────────────────────────────────────
 
+
 def _cmd_status(args: list[str]) -> None:
     """peekr status — show what's deployed for this project."""
     cfg = _load_config()
@@ -433,12 +459,15 @@ def _cmd_status(args: list[str]) -> None:
     print(f"Compliance packs  ({len(packs)})")
     if packs:
         for c in packs:
-            print(f"  {c['display_name']:<30} severity={c.get('severity','?')}  action={c['action']}")
+            print(
+                f"  {c['display_name']:<30} severity={c.get('severity', '?')}  action={c['action']}"
+            )
     else:
         print("  (none enabled)")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _cmd_compliance(args: list[str]) -> None:
     """
@@ -446,7 +475,8 @@ def _cmd_compliance(args: list[str]) -> None:
     peekr compliance enable  <PACK> [--action raise|warn]
     peekr compliance disable <PACK>
     """
-    import urllib.request, urllib.error
+    import urllib.request
+    import urllib.error
 
     if not args or args[0] in ("list", "ls"):
         cfg = _load_config()
@@ -502,20 +532,29 @@ def _cmd_compliance(args: list[str]) -> None:
             f"{endpoint}/api/v1/deploy",
             data=data,
             method="PUT",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 result = json.loads(resp.read())
             enabled = result.get("compliance", {}).get("enabled", [])
-            if pack_name in enabled or pack_name.upper() in [e.upper() for e in enabled]:
+            if pack_name in enabled or pack_name.upper() in [
+                e.upper() for e in enabled
+            ]:
                 print(f"✓ {pack_name} enabled  (action={action})")
-                print(f"  Your SDK will pick this up automatically on next startup.")
-                print(f"  No code change needed — compliance is auto-discovered.")
+                print("  Your SDK will pick this up automatically on next startup.")
+                print("  No code change needed — compliance is auto-discovered.")
             else:
                 print(f"⚠ Pack '{pack_name}' not found. Check the pack name.")
-                print("  Available: HIPAA, FDCPA, FINRA, GDPR, EU_AI_ACT, UAE_PDPL, UAE_DHA,")
-                print("             UAE_CBUAE, UAE_RERA, KSA_PDPL, UAE_DIFC, TCPA, UPL, EEOC_ADA")
+                print(
+                    "  Available: HIPAA, FDCPA, FINRA, GDPR, EU_AI_ACT, UAE_PDPL, UAE_DHA,"
+                )
+                print(
+                    "             UAE_CBUAE, UAE_RERA, KSA_PDPL, UAE_DIFC, TCPA, UPL, EEOC_ADA"
+                )
         except urllib.error.HTTPError as e:
             print(f"✗ Error: HTTP {e.code}  {e.read().decode()[:200]}")
             sys.exit(1)
@@ -526,13 +565,16 @@ def _cmd_compliance(args: list[str]) -> None:
             f"{endpoint}/api/v1/compliance",
             data=json.dumps({"pack": pack_name, "enabled": False}).encode(),
             method="PUT",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 json.loads(resp.read())
             print(f"✓ {pack_name} disabled")
-            print(f"  Changes take effect on next SDK startup.")
+            print("  Changes take effect on next SDK startup.")
         except urllib.error.HTTPError as e:
             print(f"✗ Error: HTTP {e.code}  {e.read().decode()[:200]}")
             sys.exit(1)
@@ -540,7 +582,9 @@ def _cmd_compliance(args: list[str]) -> None:
 
 def _cmd_traces_browser(path: str) -> None:
     """Generate dashboard HTML and open it in the default browser."""
-    import os, tempfile, webbrowser
+    import os
+    import tempfile
+    import webbrowser
     from .dashboard import generate_dashboard
 
     out = os.path.join(tempfile.gettempdir(), "peekr_traces.html")
@@ -551,7 +595,9 @@ def _cmd_traces_browser(path: str) -> None:
 
 
 def _fetch_status(api_key: str, endpoint: str) -> dict:
-    import urllib.request, urllib.error
+    import urllib.request
+    import urllib.error
+
     req = urllib.request.Request(
         f"{endpoint}/api/v1/status",
         headers={"Authorization": f"Bearer {api_key}"},
@@ -578,6 +624,7 @@ def _parse_yaml(path: str) -> dict:
     """
     try:
         import yaml
+
         with open(path) as f:
             data = yaml.safe_load(f)
         return _normalise_yaml(data or {})
@@ -590,6 +637,7 @@ def _parse_yaml(path: str) -> dict:
 
     try:
         import yaml as _y  # might be pyyaml under a different name
+
         data = _y.safe_load(raw)
         return _normalise_yaml(data or {})
     except Exception:
@@ -611,11 +659,11 @@ def _normalise_yaml(data: dict) -> dict:
             if not spec or not spec.get("content"):
                 continue
             out["prompts"][name] = {
-                "content":     spec["content"],
+                "content": spec["content"],
                 "description": spec.get("description"),
-                "model":       spec.get("model"),
+                "model": spec.get("model"),
                 "temperature": spec.get("temperature"),
-                "notes":       spec.get("notes"),
+                "notes": spec.get("notes"),
             }
 
     raw_guardrails = data.get("guardrails") or []
@@ -624,14 +672,16 @@ def _normalise_yaml(data: dict) -> dict:
         for rule in raw_guardrails:
             if not rule.get("name") or not rule.get("value"):
                 continue
-            out["guardrails"].append({
-                "name":    rule["name"],
-                "type":    rule.get("type", "blocked_pattern"),
-                "value":   str(rule["value"]),
-                "action":  rule.get("action", "warn"),
-                "fields":  rule.get("fields", ["output"]),
-                "enabled": rule.get("enabled", True),
-            })
+            out["guardrails"].append(
+                {
+                    "name": rule["name"],
+                    "type": rule.get("type", "blocked_pattern"),
+                    "value": str(rule["value"]),
+                    "action": rule.get("action", "warn"),
+                    "fields": rule.get("fields", ["output"]),
+                    "enabled": rule.get("enabled", True),
+                }
+            )
 
     compliance = data.get("compliance") or {}
     packs = compliance.get("packs") or []
@@ -656,6 +706,7 @@ def _cmd_dashboard(args: list[str]) -> None:
     path = rest[0] if rest else _default_path()
 
     from .dashboard import generate_dashboard  # noqa: PLC0415
+
     out = generate_dashboard(path, output=output)
     print(f"Dashboard written to {out}")
     print(f"Open it with:  open {out}")
@@ -684,6 +735,7 @@ def _cmd_replay(args: list[str]) -> None:
             i += 1
 
     from .replay import replay_trace  # noqa: PLC0415
+
     try:
         new_trace_id = replay_trace(
             trace_id=trace_id,
@@ -720,16 +772,18 @@ def _cmd_cost(path: str) -> None:
         out = attrs.get("tokens_output", 0)
         dur = s.get("duration_ms") or 0.0
         cost = (inp / 1_000_000 * 0.80) + (out / 1_000_000 * 4.00)
-        records.append({
-            "name": s["name"],
-            "model": attrs.get("model", ""),
-            "status": s.get("status", "ok"),
-            "tokens_input": inp,
-            "tokens_output": out,
-            "tokens_total": inp + out,
-            "cost": cost,
-            "duration_ms": dur,
-        })
+        records.append(
+            {
+                "name": s["name"],
+                "model": attrs.get("model", ""),
+                "status": s.get("status", "ok"),
+                "tokens_input": inp,
+                "tokens_output": out,
+                "tokens_total": inp + out,
+                "cost": cost,
+                "duration_ms": dur,
+            }
+        )
 
     llm_records = [r for r in records if r["tokens_total"] > 0]
     total_cost = sum(r["cost"] for r in llm_records)
@@ -749,15 +803,21 @@ def _cmd_cost(path: str) -> None:
     print(f"  Errors             : {errors}")
     print(f"  Total input tokens : {total_input:,}")
     print(f"  Total output tokens: {total_output:,}")
-    print(f"  Total LLM time     : {total_dur/1000:.1f}s")
+    print(f"  Total LLM time     : {total_dur / 1000:.1f}s")
     print(f"  Total cost (est.)  : ${total_cost:.5f}  (Haiku rates: $0.80/$4.00 per M)")
     print("─" * W)
 
     # ── breakdown by operation ─────────────────────────────────────────────────
-    by_op: dict[str, dict] = defaultdict(lambda: {
-        "calls": 0, "input": 0, "output": 0, "cost": 0.0,
-        "duration_ms": 0.0, "errors": 0,
-    })
+    by_op: dict[str, dict] = defaultdict(
+        lambda: {
+            "calls": 0,
+            "input": 0,
+            "output": 0,
+            "cost": 0.0,
+            "duration_ms": 0.0,
+            "errors": 0,
+        }
+    )
     for r in records:
         key = f"{r['name']}" + (f"  [{r['model']}]" if r["model"] else "")
         by_op[key]["calls"] += 1
@@ -769,13 +829,17 @@ def _cmd_cost(path: str) -> None:
 
     print()
     print("  Cost by operation:")
-    print(f"  {'Operation':<48} {'Calls':>5}  {'Cost':>9}  {'Avg/call':>9}  {'Avg ms':>7}")
+    print(
+        f"  {'Operation':<48} {'Calls':>5}  {'Cost':>9}  {'Avg/call':>9}  {'Avg ms':>7}"
+    )
     print("  " + "─" * (W - 2))
     for op, s in sorted(by_op.items(), key=lambda x: -x[1]["cost"]):
         avg_cost = s["cost"] / max(s["calls"], 1)
         avg_ms = s["duration_ms"] / max(s["calls"], 1)
         err_flag = "  \033[31m(!)\033[0m" if s["errors"] else ""
-        print(f"  {op:<48} {s['calls']:>5}  ${s['cost']:>8.5f}  ${avg_cost:>8.5f}  {avg_ms:>6.0f}ms{err_flag}")
+        print(
+            f"  {op:<48} {s['calls']:>5}  ${s['cost']:>8.5f}  ${avg_cost:>8.5f}  {avg_ms:>6.0f}ms{err_flag}"
+        )
 
     # ── top 10 hotspots ───────────────────────────────────────────────────────
     def _hotspot_score(r: dict) -> float:
@@ -788,7 +852,9 @@ def _cmd_cost(path: str) -> None:
         ranked = sorted(llm_records, key=_hotspot_score, reverse=True)[:10]
         print()
         print("  Top 10 hottest calls  (60% cost · 40% latency):")
-        print(f"  {'#':<3} {'Operation':<40} {'In':>7} {'Out':>6} {'Cost':>9} {'ms':>7}  {'Model'}")
+        print(
+            f"  {'#':<3} {'Operation':<40} {'In':>7} {'Out':>6} {'Cost':>9} {'ms':>7}  {'Model'}"
+        )
         print("  " + "─" * (W - 2))
         for i, r in enumerate(ranked, 1):
             err = " \033[31m!\033[0m" if r["status"] == "error" else ""
@@ -819,6 +885,7 @@ def _cmd_cost(path: str) -> None:
 
 def _default_path() -> str:
     import os
+
     if os.path.exists("traces.db"):
         return "traces.db"
     return "traces.jsonl"
@@ -840,8 +907,12 @@ def view_traces(path: str, show_io: bool = False):
     for i, (trace_id, trace_spans) in enumerate(traces.items()):
         if i > 0:
             print()
-        total_ms = sum(s.get("duration_ms") or 0 for s in trace_spans if s["parent_id"] is None)
-        total_tokens = sum((s.get("attributes") or {}).get("tokens_total", 0) for s in trace_spans)
+        total_ms = sum(
+            s.get("duration_ms") or 0 for s in trace_spans if s["parent_id"] is None
+        )
+        total_tokens = sum(
+            (s.get("attributes") or {}).get("tokens_total", 0) for s in trace_spans
+        )
         token_str = f"  {total_tokens} tokens" if total_tokens else ""
         print(f"Trace {trace_id[:8]}  {total_ms:.0f}ms{token_str}")
         print("─" * 48)

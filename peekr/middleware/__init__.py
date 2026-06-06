@@ -21,12 +21,8 @@ Usage::
         skip_paths={"/healthz", "/metrics"},
     )
 """
+
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Awaitable, Callable
 
 
 class PeekrASGIMiddleware:
@@ -51,13 +47,13 @@ class PeekrASGIMiddleware:
         self,
         app,
         tenant_header: str = "X-Tenant-Id",
-        user_header: str   = "X-User-Id",
+        user_header: str = "X-User-Id",
         skip_paths: set[str] | None = None,
     ) -> None:
-        self.app            = app
-        self.tenant_header  = tenant_header.lower().encode()
-        self.user_header    = user_header.lower().encode()
-        self.skip_paths     = skip_paths or {"/healthz", "/health", "/metrics", "/ping"}
+        self.app = app
+        self.tenant_header = tenant_header.lower().encode()
+        self.user_header = user_header.lower().encode()
+        self.skip_paths = skip_paths or {"/healthz", "/health", "/metrics", "/ping"}
 
     async def __call__(self, scope, receive, send) -> None:
         # Only instrument HTTP requests
@@ -65,7 +61,7 @@ class PeekrASGIMiddleware:
             await self.app(scope, receive, send)
             return
 
-        path   = scope.get("path", "/")
+        path = scope.get("path", "/")
         method = scope.get("method", "GET")
 
         if path in self.skip_paths:
@@ -90,14 +86,14 @@ class PeekrASGIMiddleware:
 
         # HTTP metadata
         span.attributes["http.method"] = method
-        span.attributes["http.path"]   = path
-        span.attributes["endpoint"]    = path
-        span.attributes["feature"]     = "http_request"
+        span.attributes["http.path"] = path
+        span.attributes["endpoint"] = path
+        span.attributes["feature"] = "http_request"
 
         # Pull tenant / user from headers
         headers = dict(scope.get("headers", []))
         tid = headers.get(self.tenant_header, b"").decode("utf-8", errors="replace")
-        uid = headers.get(self.user_header,   b"").decode("utf-8", errors="replace")
+        uid = headers.get(self.user_header, b"").decode("utf-8", errors="replace")
         if tid:
             span.attributes["tenant_id"] = tid
         if uid:

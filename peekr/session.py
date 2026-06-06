@@ -8,7 +8,9 @@ from typing import Optional
 _session_id: ContextVar[Optional[str]] = ContextVar("session_id", default=None)
 _user_id: ContextVar[Optional[str]] = ContextVar("user_id", default=None)
 _tenant_id: ContextVar[Optional[str]] = ContextVar("tenant_id", default=None)
-_retention_class: ContextVar[Optional[str]] = ContextVar("retention_class", default=None)
+_retention_class: ContextVar[Optional[str]] = ContextVar(
+    "retention_class", default=None
+)
 
 
 def get_session_id() -> Optional[str]:

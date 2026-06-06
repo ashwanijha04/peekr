@@ -1,6 +1,6 @@
 """Tests for PeekrASGIMiddleware."""
+
 import asyncio
-import pytest
 from peekr.middleware import PeekrASGIMiddleware
 from peekr.exporters import _exporters
 
@@ -58,7 +58,6 @@ async def _run(app_fn, scope):
 
 
 class TestPeekrASGIMiddleware:
-
     def setup_method(self):
         _exporters.clear()
 
@@ -138,4 +137,5 @@ class TestPeekrASGIMiddleware:
     def test_fastapi_middleware_alias(self):
         from peekr import FastAPIMiddleware
         from peekr.middleware import PeekrASGIMiddleware
+
         assert FastAPIMiddleware is PeekrASGIMiddleware

@@ -129,11 +129,15 @@ def patch_crewai():
         Crew.kickoff = _wrap(Crew.kickoff, "crewai.crew.kickoff", _crew_attrs)
 
     kickoff_async = getattr(Crew, "kickoff_async", None)
-    if kickoff_async is not None and not getattr(kickoff_async, "_peekr_patched", False):
+    if kickoff_async is not None and not getattr(
+        kickoff_async, "_peekr_patched", False
+    ):
         Crew.kickoff_async = _wrap(kickoff_async, "crewai.crew.kickoff", _crew_attrs)
 
     if not getattr(Agent.execute_task, "_peekr_patched", False):
-        Agent.execute_task = _wrap(Agent.execute_task, "crewai.agent.execute_task", _agent_attrs)
+        Agent.execute_task = _wrap(
+            Agent.execute_task, "crewai.agent.execute_task", _agent_attrs
+        )
 
     for method_name in ("execute_sync", "execute", "_execute_core"):
         method = getattr(Task, method_name, None)

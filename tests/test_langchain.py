@@ -3,6 +3,7 @@ Tests for the LangChain callback handler. The framework is not installed —
 we drive `PeekrLangChainHandler` directly, mimicking the exact signatures
 LangChain uses when it dispatches callbacks.
 """
+
 from __future__ import annotations
 import uuid
 import pytest
@@ -34,11 +35,11 @@ def _uuid():
 
 # ── Chain ────────────────────────────────────────────────────────────────────
 
+
 def test_chain_start_end_emits_span(isolated_exporters):
     h = PeekrLangChainHandler()
     rid = _uuid()
-    h.on_chain_start({"id": ["langchain", "MyChain"]},
-                     {"q": "what is 2+2"}, run_id=rid)
+    h.on_chain_start({"id": ["langchain", "MyChain"]}, {"q": "what is 2+2"}, run_id=rid)
     h.on_chain_end({"result": "4"}, run_id=rid)
 
     spans = isolated_exporters.spans
@@ -77,11 +78,13 @@ def test_chain_nests_under_parent(isolated_exporters):
 
 # ── Tool ─────────────────────────────────────────────────────────────────────
 
+
 def test_tool_start_end(isolated_exporters):
     h = PeekrLangChainHandler()
     rid = _uuid()
-    h.on_tool_start({"id": ["search_web"], "name": "search_web"},
-                    "climate policy", run_id=rid)
+    h.on_tool_start(
+        {"id": ["search_web"], "name": "search_web"}, "climate policy", run_id=rid
+    )
     h.on_tool_end("['result-1', 'result-2']", run_id=rid)
 
     s = isolated_exporters.spans[0]
@@ -100,6 +103,7 @@ def test_tool_error(isolated_exporters):
 
 # ── Retriever ────────────────────────────────────────────────────────────────
 
+
 def test_retriever_captures_documents(isolated_exporters):
     h = PeekrLangChainHandler()
     rid = _uuid()
@@ -112,6 +116,7 @@ def test_retriever_captures_documents(isolated_exporters):
 
 
 # ── LLM / Chat ──────────────────────────────────────────────────────────────
+
 
 class _Gen:
     def __init__(self, text):
@@ -134,9 +139,12 @@ class _LLMResult:
 def test_llm_captures_tokens_and_output(isolated_exporters):
     h = PeekrLangChainHandler()
     rid = _uuid()
-    h.on_llm_start({"id": ["openai", "ChatOpenAI"]},
-                   ["hi"], run_id=rid,
-                   invocation_params={"model": "gpt-4o"})
+    h.on_llm_start(
+        {"id": ["openai", "ChatOpenAI"]},
+        ["hi"],
+        run_id=rid,
+        invocation_params={"model": "gpt-4o"},
+    )
     h.on_llm_end(_LLMResult("hi back", 12, 4), run_id=rid)
 
     s = isolated_exporters.spans[0]
@@ -150,10 +158,12 @@ def test_llm_captures_tokens_and_output(isolated_exporters):
 def test_chat_model_start_uses_chat_name(isolated_exporters):
     h = PeekrLangChainHandler()
     rid = _uuid()
-    h.on_chat_model_start({"id": ["chat", "ChatOpenAI"]},
-                          [{"role": "user", "content": "hi"}],
-                          run_id=rid,
-                          invocation_params={"model": "gpt-4o-mini"})
+    h.on_chat_model_start(
+        {"id": ["chat", "ChatOpenAI"]},
+        [{"role": "user", "content": "hi"}],
+        run_id=rid,
+        invocation_params={"model": "gpt-4o-mini"},
+    )
     h.on_llm_end(_LLMResult("hello", 5, 2), run_id=rid)
     assert isolated_exporters.spans[0].name == "langchain.chat.ChatOpenAI"
 
@@ -168,6 +178,7 @@ def test_llm_error(isolated_exporters):
 
 
 # ── Agent ───────────────────────────────────────────────────────────────────
+
 
 class _AgentAction:
     def __init__(self, tool, tool_input):
@@ -200,6 +211,7 @@ def test_agent_finish_emits_span(isolated_exporters):
 
 # ── Tree ────────────────────────────────────────────────────────────────────
 
+
 def test_full_tree_chain_tool_llm(isolated_exporters):
     """Realistic shape: outer chain → tool call + LLM call, both nested."""
     h = PeekrLangChainHandler()
@@ -210,8 +222,13 @@ def test_full_tree_chain_tool_llm(isolated_exporters):
     h.on_chain_start({"id": ["AgentExecutor"]}, {"input": "q"}, run_id=chain)
     h.on_tool_start({"id": ["search"]}, "q", run_id=tool, parent_run_id=chain)
     h.on_tool_end("result", run_id=tool)
-    h.on_llm_start({"id": ["openai"]}, ["q"], run_id=llm, parent_run_id=chain,
-                   invocation_params={"model": "gpt-4o"})
+    h.on_llm_start(
+        {"id": ["openai"]},
+        ["q"],
+        run_id=llm,
+        parent_run_id=chain,
+        invocation_params={"model": "gpt-4o"},
+    )
     h.on_llm_end(_LLMResult("answer", 8, 3), run_id=llm)
     h.on_chain_end({"output": "answer"}, run_id=chain)
 

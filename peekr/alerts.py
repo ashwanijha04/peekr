@@ -14,6 +14,7 @@ from .span import Span
 # Sinks
 # ---------------------------------------------------------------------------
 
+
 class _BaseSink:
     """Where an alert is delivered when it fires.
 
@@ -53,7 +54,9 @@ class SlackSink(_BaseSink):
         self.timeout_seconds = timeout_seconds
 
     def notify(self, alert_name: str, message: str) -> None:
-        body = json.dumps({"text": f":rotating_light: *{alert_name}* — {message}"}).encode("utf-8")
+        body = json.dumps(
+            {"text": f":rotating_light: *{alert_name}* — {message}"}
+        ).encode("utf-8")
         req = urllib.request.Request(
             self.webhook_url,
             data=body,
@@ -126,6 +129,7 @@ class WebhookSink(_BaseSink):
 # ---------------------------------------------------------------------------
 # Alerts
 # ---------------------------------------------------------------------------
+
 
 class _BaseAlert:
     """Base class for all alert types.
@@ -223,8 +227,7 @@ class CostSpike(_BaseAlert):
 
     def check(self, trace_spans: list[dict[str, Any]]) -> None:
         tokens = sum(
-            s.get("attributes", {}).get("tokens_total", 0) or 0
-            for s in trace_spans
+            s.get("attributes", {}).get("tokens_total", 0) or 0 for s in trace_spans
         )
         if self._history:
             avg = sum(self._history) / len(self._history)
@@ -257,14 +260,13 @@ class LatencyP95(_BaseAlert):
 
     def check(self, trace_spans: list[dict[str, Any]]) -> None:
         durations = sorted(
-            s["duration_ms"]
-            for s in trace_spans
-            if s.get("duration_ms") is not None
+            s["duration_ms"] for s in trace_spans if s.get("duration_ms") is not None
         )
         if not durations:
             return
         # P95 index (nearest-rank method: ceil(n * 0.95) - 1, clamped)
         import math
+
         idx = min(len(durations) - 1, math.ceil(len(durations) * 0.95) - 1)
         idx = max(0, idx)
         p95 = durations[idx]
@@ -297,8 +299,7 @@ class TokenGrowth(_BaseAlert):
 
     def check(self, trace_spans: list[dict[str, Any]]) -> None:
         tokens = sum(
-            s.get("attributes", {}).get("tokens_total", 0) or 0
-            for s in trace_spans
+            s.get("attributes", {}).get("tokens_total", 0) or 0 for s in trace_spans
         )
         self._history.append(tokens)
         if len(self._history) < self.runs + 1:

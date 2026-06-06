@@ -31,7 +31,8 @@ def generate_dashboard(path: str, output: str = "dashboard.html") -> str:
         spans = _read_jsonl(path)
 
     llm_spans = [
-        s for s in spans
+        s
+        for s in spans
         if any(s["name"].startswith(p) for p in _LLM_PREFIXES)
         # Hide evaluator-judge calls — they're already in the JSONL for auditing
         # token costs, but they'd otherwise appear as duplicate worst-offender
@@ -68,13 +69,18 @@ def generate_dashboard(path: str, output: str = "dashboard.html") -> str:
 # Data prep
 # ---------------------------------------------------------------------------
 
+
 def _scores(span: dict) -> dict[str, float]:
-    return ((span.get("attributes") or {}).get("eval_scores") or {})
+    return (span.get("attributes") or {}).get("eval_scores") or {}
 
 
 def _summary(all_spans: list[dict], llm_spans: list[dict]) -> dict[str, Any]:
     eval_spans = [s for s in llm_spans if _scores(s)]
-    detailed = [s for s in eval_spans if (s.get("attributes") or {}).get("hallucination_details")]
+    detailed = [
+        s
+        for s in eval_spans
+        if (s.get("attributes") or {}).get("hallucination_details")
+    ]
     times = [s.get("start_time") for s in llm_spans if s.get("start_time")]
     return {
         "total_spans": len(all_spans),
@@ -92,21 +98,23 @@ def _series(llm_spans: list[dict]) -> list[dict[str, Any]]:
     for s in llm_spans:
         attrs = s.get("attributes") or {}
         scores = _scores(s)
-        points.append({
-            "trace_id": (s.get("trace_id") or "")[:8],
-            "ts": s.get("start_time") or 0,
-            "Hallucination":    scores.get("Hallucination"),
-            "Rubric":           scores.get("Rubric"),
-            "CitationAccuracy": scores.get("CitationAccuracy"),
-            "NotEmpty":         scores.get("NotEmpty"),
-            "NoError":          scores.get("NoError"),
-            "error": 1 if s.get("status") == "error" else 0,
-            "tokens": attrs.get("tokens_total") or 0,
-            "duration_ms": s.get("duration_ms") or 0,
-            "tenant":   attrs.get("user_id"),
-            "endpoint": attrs.get("endpoint"),
-            "model":    attrs.get("model"),
-        })
+        points.append(
+            {
+                "trace_id": (s.get("trace_id") or "")[:8],
+                "ts": s.get("start_time") or 0,
+                "Hallucination": scores.get("Hallucination"),
+                "Rubric": scores.get("Rubric"),
+                "CitationAccuracy": scores.get("CitationAccuracy"),
+                "NotEmpty": scores.get("NotEmpty"),
+                "NoError": scores.get("NoError"),
+                "error": 1 if s.get("status") == "error" else 0,
+                "tokens": attrs.get("tokens_total") or 0,
+                "duration_ms": s.get("duration_ms") or 0,
+                "tenant": attrs.get("user_id"),
+                "endpoint": attrs.get("endpoint"),
+                "model": attrs.get("model"),
+            }
+        )
     return points
 
 
@@ -144,7 +152,9 @@ def _drift(llm_spans: list[dict]) -> dict[str, dict[str, Any] | None]:
     """For each metric, mean over the oldest 30% vs the newest 30%, plus delta."""
     out: dict[str, dict[str, Any] | None] = {}
     for m in _METRICS:
-        values = [s for s in (_scores(span).get(m) for span in llm_spans) if s is not None]
+        values = [
+            s for s in (_scores(span).get(m) for span in llm_spans) if s is not None
+        ]
         n = len(values)
         if n < 6:
             out[m] = None
@@ -179,35 +189,38 @@ def _channel_drift(llm_spans: list[dict]) -> dict[str, list[dict]]:
         for segment, items in buckets.items():
             # Sort segment's spans by time so baseline/current windows are real
             items_sorted = sorted(items, key=lambda x: x.get("start_time") or 0)
-            scores = [
-                _scores(x).get("Hallucination") for x in items_sorted
-            ]
+            scores = [_scores(x).get("Hallucination") for x in items_sorted]
             scores = [v for v in scores if v is not None]
             n = len(scores)
             if n < 4:
                 # Not enough data — still include the segment but mark NA
-                rows.append({
-                    "segment": segment,
-                    "n": n,
-                    "current": (sum(scores) / n) if n else None,
-                    "baseline": None,
-                    "delta": None,
-                    "n_total": n,
-                })
+                rows.append(
+                    {
+                        "segment": segment,
+                        "n": n,
+                        "current": (sum(scores) / n) if n else None,
+                        "baseline": None,
+                        "delta": None,
+                        "n_total": n,
+                    }
+                )
                 continue
             k = max(1, n // 3)
             baseline = sum(scores[:k]) / k
             current = sum(scores[-k:]) / k
-            rows.append({
-                "segment": segment,
-                "n": n,
-                "baseline": baseline,
-                "current": current,
-                "delta": current - baseline,
-                "n_baseline": k,
-                "n_current": k,
-                "n_total": n,
-            })
+            rows.append(
+                {
+                    "segment": segment,
+                    "n": n,
+                    "baseline": baseline,
+                    "current": current,
+                    "delta": current - baseline,
+                    "n_baseline": k,
+                    "n_current": k,
+                    "n_total": n,
+                }
+            )
+
         # Most-degraded segments first (most negative delta or lowest current)
         def _sort_key(r: dict) -> tuple[float, float]:
             delta = r.get("delta")
@@ -216,6 +229,7 @@ def _channel_drift(llm_spans: list[dict]) -> dict[str, list[dict]]:
                 delta if delta is not None else 0.0,
                 current if current is not None else 1.0,
             )
+
         rows.sort(key=_sort_key)
         out[label] = rows
     return out
@@ -250,16 +264,18 @@ def _worst_offenders(llm_spans: list[dict], k: int) -> list[dict[str, Any]]:
         h = _scores(s).get("Hallucination")
         if h is None:
             continue
-        scored.append({
-            "trace_id": s.get("trace_id"),
-            "span_id": s.get("span_id"),
-            "ts": s.get("start_time") or 0,
-            "model": attrs.get("model", ""),
-            "score": h,
-            "output": (attrs.get("output") or "")[:300],
-            "input": (attrs.get("input") or "")[:300],
-            "details": attrs.get("hallucination_details"),
-        })
+        scored.append(
+            {
+                "trace_id": s.get("trace_id"),
+                "span_id": s.get("span_id"),
+                "ts": s.get("start_time") or 0,
+                "model": attrs.get("model", ""),
+                "score": h,
+                "output": (attrs.get("output") or "")[:300],
+                "input": (attrs.get("input") or "")[:300],
+                "details": attrs.get("hallucination_details"),
+            }
+        )
     scored.sort(key=lambda x: x["score"])
     return scored[:k]
 
@@ -267,6 +283,7 @@ def _worst_offenders(llm_spans: list[dict], k: int) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Rich payload for the redesigned UI
 # ---------------------------------------------------------------------------
+
 
 def _rows(llm_spans: list[dict]) -> list[dict[str, Any]]:
     """One record per LLM span with everything the redesigned UI needs.
@@ -278,34 +295,38 @@ def _rows(llm_spans: list[dict]) -> list[dict[str, Any]]:
     for s in llm_spans:
         attrs = s.get("attributes") or {}
         scores = _scores(s)
-        out.append({
-            "trace_id": s.get("trace_id"),
-            "span_id":  s.get("span_id"),
-            "ts":       s.get("start_time") or 0,
-            "model":    attrs.get("model"),
-            "tenant":   attrs.get("user_id"),
-            "endpoint": attrs.get("endpoint"),
-            "status":   s.get("status", "ok"),
-            "tokens":   attrs.get("tokens_total") or 0,
-            "duration_ms": s.get("duration_ms") or 0,
-            "Hallucination":    scores.get("Hallucination"),
-            "Rubric":           scores.get("Rubric"),
-            "CitationAccuracy": scores.get("CitationAccuracy"),
-            "NotEmpty":         scores.get("NotEmpty"),
-            "NoError":          scores.get("NoError"),
-            "input":  (attrs.get("input")  or "")[:600],
-            "output": (attrs.get("output") or "")[:600],
-            # Fallback for Anthropic spans captured before the patch merged
-            # `system` into messages — the dashboard's parseInput uses this.
-            "system": (attrs.get("system") or "")[:600] if attrs.get("system") else None,
-            "details":          attrs.get("hallucination_details"),
-            "citation_details": attrs.get("citation_details"),
-            "error":  attrs.get("error"),
-            # Evaluator failures (judge unreachable, parse error, etc.). Empty
-            # dict when no failures — distinct from a real 0.0 score, which
-            # lives in `eval_scores`.
-            "eval_errors": dict(attrs.get("eval_errors") or {}),
-        })
+        out.append(
+            {
+                "trace_id": s.get("trace_id"),
+                "span_id": s.get("span_id"),
+                "ts": s.get("start_time") or 0,
+                "model": attrs.get("model"),
+                "tenant": attrs.get("user_id"),
+                "endpoint": attrs.get("endpoint"),
+                "status": s.get("status", "ok"),
+                "tokens": attrs.get("tokens_total") or 0,
+                "duration_ms": s.get("duration_ms") or 0,
+                "Hallucination": scores.get("Hallucination"),
+                "Rubric": scores.get("Rubric"),
+                "CitationAccuracy": scores.get("CitationAccuracy"),
+                "NotEmpty": scores.get("NotEmpty"),
+                "NoError": scores.get("NoError"),
+                "input": (attrs.get("input") or "")[:600],
+                "output": (attrs.get("output") or "")[:600],
+                # Fallback for Anthropic spans captured before the patch merged
+                # `system` into messages — the dashboard's parseInput uses this.
+                "system": (attrs.get("system") or "")[:600]
+                if attrs.get("system")
+                else None,
+                "details": attrs.get("hallucination_details"),
+                "citation_details": attrs.get("citation_details"),
+                "error": attrs.get("error"),
+                # Evaluator failures (judge unreachable, parse error, etc.). Empty
+                # dict when no failures — distinct from a real 0.0 score, which
+                # lives in `eval_scores`.
+                "eval_errors": dict(attrs.get("eval_errors") or {}),
+            }
+        )
     return out
 
 
@@ -352,11 +373,13 @@ def _channel_heatmap(llm_spans: list[dict], n_buckets: int = 6) -> dict[str, Any
     for i in range(n_buckets):
         b_start = t_min + i * width
         b_end = t_min + (i + 1) * width
-        buckets.append({
-            "start": b_start,
-            "end":   b_end,
-            "label": f"{i + 1}/{n_buckets}",   # short label; tooltip gives the time range
-        })
+        buckets.append(
+            {
+                "start": b_start,
+                "end": b_end,
+                "label": f"{i + 1}/{n_buckets}",  # short label; tooltip gives the time range
+            }
+        )
 
     grids: dict[str, list[dict[str, Any]]] = {}
     for field, label in _CHANNEL_FIELDS:
@@ -376,20 +399,23 @@ def _channel_heatmap(llm_spans: list[dict], n_buckets: int = 6) -> dict[str, Any
         rows: list[dict[str, Any]] = []
         for seg, cell_lists in by_segment.items():
             cells = [
-                {"mean": sum(c) / len(c), "n": len(c)} if c
-                else {"mean": None, "n": 0}
+                {"mean": sum(c) / len(c), "n": len(c)} if c else {"mean": None, "n": 0}
                 for c in cell_lists
             ]
             n_total = sum(c["n"] for c in cells)
-            rows.append({
-                "segment":  str(seg),
-                "n_total":  n_total,
-                "cells":    cells,
-            })
+            rows.append(
+                {
+                    "segment": str(seg),
+                    "n_total": n_total,
+                    "cells": cells,
+                }
+            )
+
         # Sort: most degraded segments (lowest current-bucket mean) first.
         def _sort_key(r: dict[str, Any]) -> float:
             tail = [c["mean"] for c in r["cells"][-2:] if c["mean"] is not None]
             return min(tail) if tail else 1.0
+
         rows.sort(key=_sort_key)
         grids[label] = rows
 
@@ -421,14 +447,18 @@ def _narrative(llm_spans: list[dict]) -> dict[str, Any]:
     if not scored:
         return {
             "health": None,
-            "insights": ["No Hallucination scores recorded — add peekr.eval.Hallucination() to your evaluators."],
+            "insights": [
+                "No Hallucination scores recorded — add peekr.eval.Hallucination() to your evaluators."
+            ],
         }
 
     scored.sort(key=lambda x: x[0])
     score_values = [v for _, v, _ in scored]
     n = len(score_values)
-    current = sum(score_values[-max(1, n // 3):]) / max(1, n // 3)
-    baseline = sum(score_values[:max(1, n // 3)]) / max(1, n // 3) if n >= 6 else current
+    current = sum(score_values[-max(1, n // 3) :]) / max(1, n // 3)
+    baseline = (
+        sum(score_values[: max(1, n // 3)]) / max(1, n // 3) if n >= 6 else current
+    )
 
     delta = current - baseline
     flagged = [s for _, v, s in scored if v < 0.5]
@@ -527,6 +557,7 @@ def _narrative(llm_spans: list[dict]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # HTML rendering
 # ---------------------------------------------------------------------------
+
 
 def _render_html(data: dict[str, Any], source: str) -> str:
     payload = json.dumps(data, default=str)
@@ -2313,5 +2344,3 @@ rerender();
 </body>
 </html>
 """
-
-

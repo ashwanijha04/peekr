@@ -29,8 +29,12 @@ def _init_feedback_table(db_path: str) -> None:
                 created_at REAL NOT NULL
             )
         """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_feedback_rating   ON feedback(rating)")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_rating   ON feedback(rating)"
+        )
 
 
 def feedback(
@@ -149,16 +153,18 @@ def export_feedback(
         if d.get("span_id"):
             attrs_raw = d.get("attributes")
             attrs = json.loads(attrs_raw) if attrs_raw else {}
-            traces[tid]["spans"].append({
-                "span_id": d["span_id"],
-                "parent_id": d["parent_id"],
-                "name": d["name"],
-                "start_time": d["start_time"],
-                "end_time": d["end_time"],
-                "duration_ms": d["duration_ms"],
-                "status": d["status"],
-                "attributes": attrs,
-            })
+            traces[tid]["spans"].append(
+                {
+                    "span_id": d["span_id"],
+                    "parent_id": d["parent_id"],
+                    "name": d["name"],
+                    "start_time": d["start_time"],
+                    "end_time": d["end_time"],
+                    "duration_ms": d["duration_ms"],
+                    "status": d["status"],
+                    "attributes": attrs,
+                }
+            )
 
     with open(output, "w") as f:
         for tid, trace_data in traces.items():

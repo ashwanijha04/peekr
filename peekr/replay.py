@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Trace replay for peekr.
 
@@ -22,15 +23,16 @@ CLI
     peekr replay a3f2b1c0 --db traces.db
     peekr replay a3f2b1c0 --jsonl traces.jsonl
 """
-import json
-import sqlite3
-import uuid
-from typing import Optional
+import json  # noqa: E402
+import sqlite3  # noqa: E402
+import uuid  # noqa: E402
+from typing import Optional  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Storage helpers
 # ---------------------------------------------------------------------------
+
 
 def load_trace(
     trace_id: str,
@@ -96,9 +98,11 @@ def _is_llm_span(span: dict) -> bool:
 
 def _replay_openai(span: dict) -> None:
     import sys  # noqa: PLC0415
+
     openai = sys.modules.get("openai")
     if openai is None:
         import openai as _openai  # noqa: PLC0415
+
         openai = _openai
     attrs = span.get("attributes", {})
     model = attrs.get("model", "gpt-4o")
@@ -111,9 +115,11 @@ def _replay_openai(span: dict) -> None:
 
 def _replay_anthropic(span: dict) -> None:
     import sys  # noqa: PLC0415
+
     anthropic = sys.modules.get("anthropic")
     if anthropic is None:
         import anthropic as _anthropic  # noqa: PLC0415
+
         anthropic = _anthropic
     attrs = span.get("attributes", {})
     model = attrs.get("model", "claude-3-5-haiku-20241022")
@@ -127,9 +133,11 @@ def _replay_anthropic(span: dict) -> None:
 
 def _replay_bedrock(span: dict) -> None:
     import sys  # noqa: PLC0415
+
     boto3 = sys.modules.get("boto3")
     if boto3 is None:
         import boto3 as _boto3  # noqa: PLC0415
+
         boto3 = _boto3
     attrs = span.get("attributes", {})
     model = attrs.get("model", "amazon.titan-text-lite-v1")
@@ -154,6 +162,7 @@ def _replay_span(span: dict) -> None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def replay_trace(
     trace_id: str,
@@ -185,6 +194,7 @@ def replay_trace(
     # Default storage path
     if db_path is None and jsonl_path is None:
         import os
+
         if os.path.exists("traces.db"):
             db_path = "traces.db"
         else:
@@ -198,6 +208,7 @@ def replay_trace(
 
     # Stamp a new trace_id into the context so all replayed calls share it
     from .context import _current_trace_id  # noqa: PLC0415
+
     new_trace_id = uuid.uuid4().hex
     token = _current_trace_id.set(new_trace_id)
     try:

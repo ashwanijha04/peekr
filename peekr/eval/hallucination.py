@@ -72,7 +72,7 @@ _DETAILED_PROMPT = (
     "  - unsupported   — neither entailed nor contradicted (CONTEXT is silent)\n"
     "Return ONLY a JSON object in this exact shape — no prose:\n"
     '  {{"claims": [{{"text": "<claim>", "verdict": "<verdict>"}}, ...]}}\n'
-    "If OUTPUT has no factual claims, return {{\"claims\": []}}.\n\n"
+    'If OUTPUT has no factual claims, return {{"claims": []}}.\n\n'
     "CONTEXT:\n{context}\n\nOUTPUT:\n{output}"
 )
 
@@ -91,7 +91,7 @@ _ATTRIBUTION_PROMPT = (
     "Use ONLY chunk numbers that appear in CONTEXT. Return ONLY this JSON, no prose:\n"
     '  {{"claims": [{{"text": "<claim>", "verdict": "<verdict>", '
     '"support": [<int>, ...], "contradict": [<int>, ...]}}]}}\n'
-    "If OUTPUT has no factual claims, return {{\"claims\": []}}.\n\n"
+    'If OUTPUT has no factual claims, return {{"claims": []}}.\n\n'
     "CONTEXT:\n{context}\n\nOUTPUT:\n{output}"
 )
 
@@ -158,13 +158,15 @@ def _parse_attributed_claims(text: str, n_chunks: int) -> list[dict]:
             verdict = "contradicted"
         elif support and verdict == "unsupported":
             verdict = "supported"
-        cleaned.append({
-            "text": claim_text,
-            "verdict": verdict,
-            "support": support,
-            "contradict": contradict,
-            "blame": _blame_for(verdict, support, contradict),
-        })
+        cleaned.append(
+            {
+                "text": claim_text,
+                "verdict": verdict,
+                "support": support,
+                "contradict": contradict,
+                "blame": _blame_for(verdict, support, contradict),
+            }
+        )
     return cleaned
 
 
@@ -232,6 +234,7 @@ class Hallucination(BaseEvaluator):
         # users dump tool I/O. Treat these as not-evaluable (score 1.0)
         # rather than paying the judge to misgrade them as 0.0.
         from .citation import looks_like_tool_call  # local import to avoid cycle
+
         if looks_like_tool_call(output):
             span.attributes.setdefault(
                 "hallucination_details",
@@ -254,6 +257,7 @@ class Hallucination(BaseEvaluator):
         # faithfulness score because it produces the evidence edge, not just a
         # number.
         from ..evidence import get_evidence
+
         chunks = get_evidence()
         if chunks:
             return self._evaluate_with_attribution(chunks, output, span)
@@ -355,6 +359,7 @@ class Hallucination(BaseEvaluator):
 
     def _judge(self, prompt: str, max_tokens: int, fallback: str) -> str:
         from ._judge import call_judge
+
         return call_judge(
             prompt,
             max_tokens=max_tokens,

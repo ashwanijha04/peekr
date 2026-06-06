@@ -3,6 +3,7 @@ Tests for the LlamaIndex callback handler. We don't import llama_index —
 we drive `PeekrLlamaIndexHandler` directly using the same payload shapes
 LlamaIndex passes to `on_event_start` / `on_event_end`.
 """
+
 from __future__ import annotations
 import pytest
 
@@ -29,6 +30,7 @@ def isolated_exporters():
 
 # ── LLM events ──────────────────────────────────────────────────────────────
 
+
 class _Usage:
     def __init__(self, prompt, completion):
         self.prompt_tokens = prompt
@@ -49,13 +51,17 @@ class _Response:
 
 def test_llm_event_captures_usage(isolated_exporters):
     h = PeekrLlamaIndexHandler()
-    h.on_event_start("llm",
-                     payload={"messages": [{"role": "user", "content": "hi"}],
-                              "serialized": {"model": "gpt-4o"}},
-                     event_id="e1")
-    h.on_event_end("llm",
-                   payload={"response": _Response("hello", 10, 4)},
-                   event_id="e1")
+    h.on_event_start(
+        "llm",
+        payload={
+            "messages": [{"role": "user", "content": "hi"}],
+            "serialized": {"model": "gpt-4o"},
+        },
+        event_id="e1",
+    )
+    h.on_event_end(
+        "llm", payload={"response": _Response("hello", 10, 4)}, event_id="e1"
+    )
 
     s = isolated_exporters.spans[0]
     assert s.name == "llamaindex.llm"
@@ -76,12 +82,15 @@ def test_llm_event_no_usage_doesnt_crash(isolated_exporters):
 
 # ── Retrieve events ─────────────────────────────────────────────────────────
 
+
 def test_retrieve_event_captures_documents(isolated_exporters):
     h = PeekrLlamaIndexHandler()
     h.on_event_start("retrieve", payload={"query_str": "climate"}, event_id="r1")
-    h.on_event_end("retrieve",
-                   payload={"nodes": [{"text": "n1"}, {"text": "n2"}, {"text": "n3"}]},
-                   event_id="r1")
+    h.on_event_end(
+        "retrieve",
+        payload={"nodes": [{"text": "n1"}, {"text": "n2"}, {"text": "n3"}]},
+        event_id="r1",
+    )
 
     s = isolated_exporters.spans[0]
     assert s.name == "llamaindex.retrieve"
@@ -90,6 +99,7 @@ def test_retrieve_event_captures_documents(isolated_exporters):
 
 
 # ── Query / Agent step ──────────────────────────────────────────────────────
+
 
 def test_query_event_captures_input_output(isolated_exporters):
     h = PeekrLlamaIndexHandler()
@@ -104,9 +114,11 @@ def test_query_event_captures_input_output(isolated_exporters):
 
 def test_agent_step_event(isolated_exporters):
     h = PeekrLlamaIndexHandler()
-    h.on_event_start("agent_step",
-                     payload={"messages": [{"role": "user", "content": "do thing"}]},
-                     event_id="a1")
+    h.on_event_start(
+        "agent_step",
+        payload={"messages": [{"role": "user", "content": "do thing"}]},
+        event_id="a1",
+    )
     h.on_event_end("agent_step", payload={}, event_id="a1")
 
     s = isolated_exporters.spans[0]
@@ -116,14 +128,17 @@ def test_agent_step_event(isolated_exporters):
 
 # ── Function call ───────────────────────────────────────────────────────────
 
+
 def test_function_call_event(isolated_exporters):
     h = PeekrLlamaIndexHandler()
-    h.on_event_start("function_call",
-                     payload={"tool": "calculator", "function_call": "add(1,2)"},
-                     event_id="f1")
-    h.on_event_end("function_call",
-                   payload={"function_call_response": "3"},
-                   event_id="f1")
+    h.on_event_start(
+        "function_call",
+        payload={"tool": "calculator", "function_call": "add(1,2)"},
+        event_id="f1",
+    )
+    h.on_event_end(
+        "function_call", payload={"function_call_response": "3"}, event_id="f1"
+    )
 
     s = isolated_exporters.spans[0]
     assert s.name == "llamaindex.function_call"
@@ -132,17 +147,16 @@ def test_function_call_event(isolated_exporters):
 
 # ── Parent/child nesting ────────────────────────────────────────────────────
 
+
 def test_events_nest_via_parent_id(isolated_exporters):
     h = PeekrLlamaIndexHandler()
     h.on_event_start("query", payload={"query_str": "q"}, event_id="root")
-    h.on_event_start("retrieve", payload={"query_str": "q"},
-                     event_id="ret", parent_id="root")
+    h.on_event_start(
+        "retrieve", payload={"query_str": "q"}, event_id="ret", parent_id="root"
+    )
     h.on_event_end("retrieve", payload={"nodes": []}, event_id="ret")
-    h.on_event_start("llm", payload={"messages": []},
-                     event_id="llm", parent_id="root")
-    h.on_event_end("llm",
-                   payload={"response": _Response("ok", 1, 1)},
-                   event_id="llm")
+    h.on_event_start("llm", payload={"messages": []}, event_id="llm", parent_id="root")
+    h.on_event_end("llm", payload={"response": _Response("ok", 1, 1)}, event_id="llm")
     h.on_event_end("query", payload={"response": "ok"}, event_id="root")
 
     by_name = {s.name: s for s in isolated_exporters.spans}
@@ -156,11 +170,11 @@ def test_events_nest_via_parent_id(isolated_exporters):
 
 # ── Error propagation ───────────────────────────────────────────────────────
 
+
 def test_payload_exception_marks_error(isolated_exporters):
     h = PeekrLlamaIndexHandler()
     h.on_event_start("llm", payload={}, event_id="e")
-    h.on_event_end("llm", payload={"exception": RuntimeError("oops")},
-                   event_id="e")
+    h.on_event_end("llm", payload={"exception": RuntimeError("oops")}, event_id="e")
     s = isolated_exporters.spans[0]
     assert s.status == "error"
     assert "oops" in s.attributes["error"]
@@ -174,8 +188,10 @@ def test_end_without_start_is_noop(isolated_exporters):
 
 # ── Enum-style event types ──────────────────────────────────────────────────
 
+
 class _FakeEventType:
-    def __init__(self, v): self.value = v
+    def __init__(self, v):
+        self.value = v
 
 
 def test_enum_event_type_lowercased(isolated_exporters):

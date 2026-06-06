@@ -6,27 +6,27 @@ from ..exporters import export_span
 _TRUNCATE = 1000
 
 _PROVIDER_PREFIXES = (
-    ("gpt-",        "openai"),
-    ("o1",          "openai"),
-    ("o3",          "openai"),
-    ("o4",          "openai"),
-    ("claude-",     "anthropic"),
-    ("command",     "cohere"),
-    ("mistral",     "mistral"),
-    ("mixtral",     "mistral"),
-    ("gemini",      "google"),
-    ("palm",        "google"),
-    ("llama",       "meta"),
-    ("titan",       "amazon"),
-    ("nova",        "amazon"),
-    ("j2-",         "ai21"),
-    ("jamba",       "ai21"),
-    ("cohere.",     "cohere"),
-    ("anthropic/",  "anthropic"),
-    ("openai/",     "openai"),
-    ("mistral/",    "mistral"),
-    ("google/",     "google"),
-    ("meta/",       "meta"),
+    ("gpt-", "openai"),
+    ("o1", "openai"),
+    ("o3", "openai"),
+    ("o4", "openai"),
+    ("claude-", "anthropic"),
+    ("command", "cohere"),
+    ("mistral", "mistral"),
+    ("mixtral", "mistral"),
+    ("gemini", "google"),
+    ("palm", "google"),
+    ("llama", "meta"),
+    ("titan", "amazon"),
+    ("nova", "amazon"),
+    ("j2-", "ai21"),
+    ("jamba", "ai21"),
+    ("cohere.", "cohere"),
+    ("anthropic/", "anthropic"),
+    ("openai/", "openai"),
+    ("mistral/", "mistral"),
+    ("google/", "google"),
+    ("meta/", "meta"),
     ("meta-llama/", "meta"),
 )
 
@@ -38,9 +38,22 @@ def _derive_provider(model: str) -> str:
     # handle "provider/model" slash notation first
     if "/" in lower:
         prefix = lower.split("/")[0]
-        if prefix in ("openai", "anthropic", "cohere", "mistral", "google",
-                      "meta", "amazon", "ai21", "bedrock", "groq", "together",
-                      "deepinfra", "perplexity", "fireworks"):
+        if prefix in (
+            "openai",
+            "anthropic",
+            "cohere",
+            "mistral",
+            "google",
+            "meta",
+            "amazon",
+            "ai21",
+            "bedrock",
+            "groq",
+            "together",
+            "deepinfra",
+            "perplexity",
+            "fireworks",
+        ):
             return prefix
     for prefix, provider in _PROVIDER_PREFIXES:
         if lower.startswith(prefix):
@@ -99,7 +112,9 @@ class _LiteLLMStreamWrapper:
                         prompt_tokens = getattr(usage, "prompt_tokens", None)
                     if completion_tokens is None and usage:
                         completion_tokens = getattr(usage, "completion_tokens", None)
-                    total_tokens = getattr(usage, "total_tokens", None) if usage else None
+                    total_tokens = (
+                        getattr(usage, "total_tokens", None) if usage else None
+                    )
                     if prompt_tokens is not None:
                         self._span.attributes["tokens_input"] = prompt_tokens
                     if completion_tokens is not None:
@@ -117,7 +132,9 @@ class _LiteLLMStreamWrapper:
                 yield chunk
             if self._parts:
                 out = "".join(self._parts)
-                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                self._span.attributes["output"] = (
+                    out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                )
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -171,7 +188,9 @@ class _AsyncLiteLLMStreamWrapper:
                         prompt_tokens = getattr(usage, "prompt_tokens", None)
                     if completion_tokens is None and usage:
                         completion_tokens = getattr(usage, "completion_tokens", None)
-                    total_tokens = getattr(usage, "total_tokens", None) if usage else None
+                    total_tokens = (
+                        getattr(usage, "total_tokens", None) if usage else None
+                    )
                     if prompt_tokens is not None:
                         self._span.attributes["tokens_input"] = prompt_tokens
                     if completion_tokens is not None:
@@ -189,7 +208,9 @@ class _AsyncLiteLLMStreamWrapper:
                 yield chunk
             if self._parts:
                 out = "".join(self._parts)
-                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                self._span.attributes["output"] = (
+                    out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                )
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -228,7 +249,9 @@ def _make_completion_patch(original):
         span.attributes["provider"] = _derive_provider(model)
         messages = kwargs.get("messages", "")
         inp = str(messages)
-        span.attributes["input"] = inp[:_TRUNCATE] + "…" if len(inp) > _TRUNCATE else inp
+        span.attributes["input"] = (
+            inp[:_TRUNCATE] + "…" if len(inp) > _TRUNCATE else inp
+        )
         is_streaming = kwargs.get("stream", False)
         try:
             result = original(*args, **kwargs)
@@ -236,7 +259,9 @@ def _make_completion_patch(original):
                 return _LiteLLMStreamWrapper(result, span, token)
             _extract_usage(result, span)
             output = _extract_output(result)
-            span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+            span.attributes["output"] = (
+                output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+            )
             span.status = "ok"
             return result
         except Exception as e:
@@ -247,6 +272,7 @@ def _make_completion_patch(original):
             if not is_streaming:
                 end_span(span, token)
                 export_span(span)
+
     return patched
 
 
@@ -258,7 +284,9 @@ def _make_acompletion_patch(original):
         span.attributes["provider"] = _derive_provider(model)
         messages = kwargs.get("messages", "")
         inp = str(messages)
-        span.attributes["input"] = inp[:_TRUNCATE] + "…" if len(inp) > _TRUNCATE else inp
+        span.attributes["input"] = (
+            inp[:_TRUNCATE] + "…" if len(inp) > _TRUNCATE else inp
+        )
         is_streaming = kwargs.get("stream", False)
         try:
             result = await original(*args, **kwargs)
@@ -266,7 +294,9 @@ def _make_acompletion_patch(original):
                 return _AsyncLiteLLMStreamWrapper(result, span, token)
             _extract_usage(result, span)
             output = _extract_output(result)
-            span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+            span.attributes["output"] = (
+                output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+            )
             span.status = "ok"
             return result
         except Exception as e:
@@ -277,6 +307,7 @@ def _make_acompletion_patch(original):
             if not is_streaming:
                 end_span(span, token)
                 export_span(span)
+
     return patched
 
 

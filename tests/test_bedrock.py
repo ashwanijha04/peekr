@@ -1,6 +1,7 @@
 """
 Tests for Bedrock patch. Mocks botocore directly — no AWS credentials needed.
 """
+
 from __future__ import annotations
 import pytest
 from unittest.mock import MagicMock, patch
@@ -40,8 +41,10 @@ botocore = pytest.importorskip("botocore", reason="botocore not installed")
 
 # ── converse (non-streaming) ──────────────────────────────────────────────────
 
+
 def test_converse_captures_tokens(isolated_exporters):
     import botocore.client
+
     patch_bedrock()
 
     fake_response = {
@@ -54,17 +57,19 @@ def test_converse_captures_tokens(isolated_exporters):
     with patch.object(
         botocore.client.BaseClient, "_make_api_call", return_value=fake_response
     ):
-        result = botocore.client.BaseClient._make_api_call(
+        botocore.client.BaseClient._make_api_call(
             client,
             "Converse",
-            {"modelId": "anthropic.claude-3-haiku-20240307-v1:0",
-             "messages": [{"role": "user", "content": [{"text": "Hi"}]}]},
+            {
+                "modelId": "anthropic.claude-3-haiku-20240307-v1:0",
+                "messages": [{"role": "user", "content": [{"text": "Hi"}]}],
+            },
         )
 
     span = isolated_exporters.spans[0]
-    assert span.attributes["tokens_input"]  == 15
+    assert span.attributes["tokens_input"] == 15
     assert span.attributes["tokens_output"] == 6
-    assert span.attributes["tokens_total"]  == 21
+    assert span.attributes["tokens_total"] == 21
     assert span.attributes["model"] == "anthropic.claude-3-haiku-20240307-v1:0"
     assert span.attributes["output"] == "Hello!"
     assert span.status == "ok"
@@ -72,17 +77,25 @@ def test_converse_captures_tokens(isolated_exporters):
 
 def test_converse_captures_input(isolated_exporters):
     import botocore.client
+
     patch_bedrock()
 
     client = _make_client()
     with patch.object(
-        botocore.client.BaseClient, "_make_api_call",
-        return_value={"output": {"message": {"content": [{"text": "ok"}]}}, "usage": {}}
+        botocore.client.BaseClient,
+        "_make_api_call",
+        return_value={
+            "output": {"message": {"content": [{"text": "ok"}]}},
+            "usage": {},
+        },
     ):
         botocore.client.BaseClient._make_api_call(
-            client, "Converse",
-            {"modelId": "amazon.titan-text-lite-v1",
-             "messages": [{"role": "user", "content": [{"text": "hello"}]}]},
+            client,
+            "Converse",
+            {
+                "modelId": "amazon.titan-text-lite-v1",
+                "messages": [{"role": "user", "content": [{"text": "hello"}]}],
+            },
         )
 
     assert "input" in isolated_exporters.spans[0].attributes
@@ -90,12 +103,14 @@ def test_converse_captures_input(isolated_exporters):
 
 def test_converse_error(isolated_exporters):
     import botocore.client
+
     patch_bedrock()
 
     client = _make_client()
     with patch.object(
-        botocore.client.BaseClient, "_make_api_call",
-        side_effect=RuntimeError("throttled")
+        botocore.client.BaseClient,
+        "_make_api_call",
+        side_effect=RuntimeError("throttled"),
     ):
         with pytest.raises(RuntimeError):
             botocore.client.BaseClient._make_api_call(
@@ -110,6 +125,7 @@ def test_converse_error(isolated_exporters):
 def test_non_bedrock_passthrough(isolated_exporters):
     """Calls to other AWS services must not be intercepted."""
     import botocore.client
+
     patch_bedrock()
 
     s3_response = {"Buckets": []}
@@ -117,15 +133,14 @@ def test_non_bedrock_passthrough(isolated_exporters):
     with patch.object(
         botocore.client.BaseClient, "_make_api_call", return_value=s3_response
     ):
-        result = botocore.client.BaseClient._make_api_call(
-            client, "ListBuckets", {}
-        )
+        result = botocore.client.BaseClient._make_api_call(client, "ListBuckets", {})
 
     assert result == s3_response
     assert len(isolated_exporters.spans) == 0
 
 
 # ── converse_stream ───────────────────────────────────────────────────────────
+
 
 def _make_stream_events(input_tokens=10, output_tokens=5):
     return [
@@ -134,7 +149,11 @@ def _make_stream_events(input_tokens=10, output_tokens=5):
         {"contentBlockDelta": {"delta": {"text": " there"}, "contentBlockIndex": 0}},
         {"contentBlockStop": {"contentBlockIndex": 0}},
         {"messageStop": {"stopReason": "end_turn"}},
-        {"metadata": {"usage": {"inputTokens": input_tokens, "outputTokens": output_tokens}}},
+        {
+            "metadata": {
+                "usage": {"inputTokens": input_tokens, "outputTokens": output_tokens}
+            }
+        },
     ]
 
 
@@ -146,9 +165,9 @@ def test_stream_wrapper_captures_tokens(isolated_exporters):
     list(wrapper)
 
     span = isolated_exporters.spans[0]
-    assert span.attributes["tokens_input"]  == 20
+    assert span.attributes["tokens_input"] == 20
     assert span.attributes["tokens_output"] == 8
-    assert span.attributes["tokens_total"]  == 28
+    assert span.attributes["tokens_total"] == 28
 
 
 def test_stream_wrapper_yields_all_events(isolated_exporters):

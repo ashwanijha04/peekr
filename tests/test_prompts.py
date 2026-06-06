@@ -1,4 +1,5 @@
 """Tests for peekr.prompts — no real API key needed."""
+
 from __future__ import annotations
 import unittest.mock as mock
 import json
@@ -7,6 +8,7 @@ from peekr.prompts import Prompt, get
 
 
 # ── Prompt.render ─────────────────────────────────────────────────────────────
+
 
 class TestPromptRender:
     def _make(self, content: str, variables: list) -> Prompt:
@@ -48,9 +50,9 @@ class TestPromptRender:
 
 # ── prompts.get ───────────────────────────────────────────────────────────────
 
+
 class TestPromptGet:
     def _mock_response(self, data: dict):
-        import io
         resp = mock.MagicMock()
         resp.__enter__ = lambda s: s
         resp.__exit__ = mock.MagicMock(return_value=False)
@@ -66,7 +68,9 @@ class TestPromptGet:
             "model": "gpt-4o-mini",
             "notes": "Improved",
         }
-        with mock.patch("urllib.request.urlopen", return_value=self._mock_response(payload)):
+        with mock.patch(
+            "urllib.request.urlopen", return_value=self._mock_response(payload)
+        ):
             p = get("rag_answer", api_key="pk_live_test")
 
         assert p.name == "rag_answer"
@@ -80,8 +84,13 @@ class TestPromptGet:
 
     def test_prompt_not_found_raises(self):
         import urllib.error
+
         error = urllib.error.HTTPError(
-            url="", code=404, msg="Not Found", hdrs=None, fp=None  # type: ignore
+            url="",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=None,  # type: ignore
         )
         error.read = lambda: json.dumps({"error": "prompt_not_found"}).encode()
         with mock.patch("urllib.request.urlopen", side_effect=error):
@@ -97,6 +106,8 @@ class TestPromptGet:
             "model": None,
             "notes": None,
         }
-        with mock.patch("urllib.request.urlopen", return_value=self._mock_response(payload)):
+        with mock.patch(
+            "urllib.request.urlopen", return_value=self._mock_response(payload)
+        ):
             p = get("tmpl", api_key="pk_live_test")
         assert p.render(name="Alice") == "Hello Alice!"

@@ -31,6 +31,7 @@ def _start_framework_span(name, parent_span_id):
     span = Span(name=name, trace_id=trace_id, parent_id=parent_span_id)
     try:
         from ..session import get_session_id, get_user_id
+
         sid = get_session_id()
         uid = get_user_id()
         if sid:
@@ -94,7 +95,9 @@ class PeekrLlamaIndexHandler:
         return
 
     # ── Event hooks ──────────────────────────────────────────────────────────
-    def on_event_start(self, event_type, payload=None, event_id="", parent_id="", **kwargs):
+    def on_event_start(
+        self, event_type, payload=None, event_id="", parent_id="", **kwargs
+    ):
         type_str = _event_type_str(event_type)
         with self._lock:
             parent_entry = self._events.get(parent_id) if parent_id else None
@@ -105,7 +108,11 @@ class PeekrLlamaIndexHandler:
 
         payload = payload or {}
         if type_str == "llm":
-            model = payload.get("serialized", {}).get("model") if isinstance(payload.get("serialized"), dict) else None
+            model = (
+                payload.get("serialized", {}).get("model")
+                if isinstance(payload.get("serialized"), dict)
+                else None
+            )
             attrs["model"] = model or payload.get("model") or "unknown"
             if "messages" in payload:
                 attrs["input"] = _serialize(payload["messages"])
@@ -158,20 +165,31 @@ class PeekrLlamaIndexHandler:
                     if usage is not None:
                         inp = getattr(usage, "prompt_tokens", None)
                         if inp is None and isinstance(usage, dict):
-                            inp = usage.get("prompt_tokens", usage.get("input_tokens", 0))
+                            inp = usage.get(
+                                "prompt_tokens", usage.get("input_tokens", 0)
+                            )
                         out = getattr(usage, "completion_tokens", None)
                         if out is None and isinstance(usage, dict):
-                            out = usage.get("completion_tokens", usage.get("output_tokens", 0))
+                            out = usage.get(
+                                "completion_tokens", usage.get("output_tokens", 0)
+                            )
                         tot = getattr(usage, "total_tokens", None)
                         if tot is None and isinstance(usage, dict):
                             tot = usage.get("total_tokens", (inp or 0) + (out or 0))
-                        if inp is not None: attrs["tokens_input"] = inp
-                        if out is not None: attrs["tokens_output"] = out
-                        if tot is not None: attrs["tokens_total"] = tot
-                    text = getattr(response, "text", None) or getattr(response, "content", None)
+                        if inp is not None:
+                            attrs["tokens_input"] = inp
+                        if out is not None:
+                            attrs["tokens_output"] = out
+                        if tot is not None:
+                            attrs["tokens_total"] = tot
+                    text = getattr(response, "text", None) or getattr(
+                        response, "content", None
+                    )
                     if text is None:
                         msg = getattr(response, "message", None)
-                        text = getattr(msg, "content", None) if msg is not None else None
+                        text = (
+                            getattr(msg, "content", None) if msg is not None else None
+                        )
                     if text is not None:
                         attrs["output"] = _truncate(str(text))
                 if "response" not in payload and "completion" in payload:
@@ -220,12 +238,13 @@ def patch_llamaindex():
     BaseCallbackHandler = None
     CallbackManager = None
     Settings = None
-    set_global_handler = None
+    _ = None
 
     try:
         from llama_index.core.callbacks.base_handler import BaseCallbackHandler as _BCH
         from llama_index.core.callbacks import CallbackManager as _CM
         from llama_index.core import Settings as _Settings
+
         BaseCallbackHandler = _BCH
         CallbackManager = _CM
         Settings = _Settings
@@ -233,6 +252,7 @@ def patch_llamaindex():
         try:
             from llama_index.callbacks.base import BaseCallbackHandler as _BCH
             from llama_index.callbacks import CallbackManager as _CM
+
             BaseCallbackHandler = _BCH
             CallbackManager = _CM
         except ImportError:
@@ -254,6 +274,7 @@ def patch_llamaindex():
         else:
             # Legacy path — best effort
             from llama_index import set_global_handler as _sgh  # type: ignore
+
             _sgh("simple")  # initialise global handler infra
     except Exception:
         pass

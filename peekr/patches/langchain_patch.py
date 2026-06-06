@@ -31,6 +31,7 @@ def _start_framework_span(name, parent_span_id):
     span = Span(name=name, trace_id=trace_id, parent_id=parent_span_id)
     try:
         from ..session import get_session_id, get_user_id
+
         sid = get_session_id()
         uid = get_user_id()
         if sid:
@@ -112,10 +113,16 @@ class PeekrLangChainHandler:
         return span
 
     # ── Chain ────────────────────────────────────────────────────────────────
-    def on_chain_start(self, serialized, inputs, *, run_id, parent_run_id=None, **kwargs):
+    def on_chain_start(
+        self, serialized, inputs, *, run_id, parent_run_id=None, **kwargs
+    ):
         name = _extract_name(serialized, kwargs.get("name"), "run")
-        self._begin(run_id, parent_run_id, f"langchain.chain.{name}",
-                    {"input": _serialize(inputs)})
+        self._begin(
+            run_id,
+            parent_run_id,
+            f"langchain.chain.{name}",
+            {"input": _serialize(inputs)},
+        )
 
     def on_chain_end(self, outputs, *, run_id, **kwargs):
         self._finish(run_id, {"output": _serialize(outputs)})
@@ -124,10 +131,16 @@ class PeekrLangChainHandler:
         self._finish(run_id, {"error": str(error)}, status="error")
 
     # ── Tool ─────────────────────────────────────────────────────────────────
-    def on_tool_start(self, serialized, input_str, *, run_id, parent_run_id=None, **kwargs):
+    def on_tool_start(
+        self, serialized, input_str, *, run_id, parent_run_id=None, **kwargs
+    ):
         name = _extract_name(serialized, kwargs.get("name"), "call")
-        self._begin(run_id, parent_run_id, f"langchain.tool.{name}",
-                    {"input": _truncate(str(input_str))})
+        self._begin(
+            run_id,
+            parent_run_id,
+            f"langchain.tool.{name}",
+            {"input": _truncate(str(input_str))},
+        )
 
     def on_tool_end(self, output, *, run_id, **kwargs):
         self._finish(run_id, {"output": _serialize(output)})
@@ -136,10 +149,16 @@ class PeekrLangChainHandler:
         self._finish(run_id, {"error": str(error)}, status="error")
 
     # ── Retriever ────────────────────────────────────────────────────────────
-    def on_retriever_start(self, serialized, query, *, run_id, parent_run_id=None, **kwargs):
+    def on_retriever_start(
+        self, serialized, query, *, run_id, parent_run_id=None, **kwargs
+    ):
         name = _extract_name(serialized, kwargs.get("name"), "query")
-        self._begin(run_id, parent_run_id, f"langchain.retriever.{name}",
-                    {"input": _serialize(query)})
+        self._begin(
+            run_id,
+            parent_run_id,
+            f"langchain.retriever.{name}",
+            {"input": _serialize(query)},
+        )
 
     def on_retriever_end(self, documents, *, run_id, **kwargs):
         attrs = {"output": _serialize(documents)}
@@ -156,36 +175,54 @@ class PeekrLangChainHandler:
     def on_agent_action(self, action, *, run_id, parent_run_id=None, **kwargs):
         tool = getattr(action, "tool", "unknown")
         tool_input = getattr(action, "tool_input", None)
-        self._begin(run_id, parent_run_id, "langchain.agent.action", {
-            "tool": tool,
-            "input": _serialize(tool_input),
-        })
+        self._begin(
+            run_id,
+            parent_run_id,
+            "langchain.agent.action",
+            {
+                "tool": tool,
+                "input": _serialize(tool_input),
+            },
+        )
         # AgentAction is a point-in-time event in LangChain — no matching end.
         self._finish(run_id)
 
     def on_agent_finish(self, finish, *, run_id, parent_run_id=None, **kwargs):
         ret = getattr(finish, "return_values", None)
-        self._begin(run_id, parent_run_id, "langchain.agent.finish", {
-            "output": _serialize(ret),
-        })
+        self._begin(
+            run_id,
+            parent_run_id,
+            "langchain.agent.finish",
+            {
+                "output": _serialize(ret),
+            },
+        )
         self._finish(run_id)
 
     # ── LLM / Chat model ─────────────────────────────────────────────────────
-    def on_llm_start(self, serialized, prompts, *, run_id, parent_run_id=None, **kwargs):
+    def on_llm_start(
+        self, serialized, prompts, *, run_id, parent_run_id=None, **kwargs
+    ):
         name = _extract_name(serialized, kwargs.get("name"), "completion")
         invocation = kwargs.get("invocation_params") or {}
         attrs = {
             "input": _serialize(prompts),
-            "model": invocation.get("model") or invocation.get("model_name") or "unknown",
+            "model": invocation.get("model")
+            or invocation.get("model_name")
+            or "unknown",
         }
         self._begin(run_id, parent_run_id, f"langchain.llm.{name}", attrs)
 
-    def on_chat_model_start(self, serialized, messages, *, run_id, parent_run_id=None, **kwargs):
+    def on_chat_model_start(
+        self, serialized, messages, *, run_id, parent_run_id=None, **kwargs
+    ):
         name = _extract_name(serialized, kwargs.get("name"), "chat")
         invocation = kwargs.get("invocation_params") or {}
         attrs = {
             "input": _serialize(messages),
-            "model": invocation.get("model") or invocation.get("model_name") or "unknown",
+            "model": invocation.get("model")
+            or invocation.get("model_name")
+            or "unknown",
         }
         self._begin(run_id, parent_run_id, f"langchain.chat.{name}", attrs)
 
@@ -209,7 +246,9 @@ class PeekrLangChainHandler:
                     text = getattr(first, "text", None)
                     if text is None:
                         msg = getattr(first, "message", None)
-                        text = getattr(msg, "content", None) if msg is not None else None
+                        text = (
+                            getattr(msg, "content", None) if msg is not None else None
+                        )
                     if text is not None:
                         attrs["output"] = _truncate(str(text))
         except Exception:
@@ -237,20 +276,24 @@ def patch_langchain():
     register_configure_hook = None
     try:
         from langchain_core.callbacks.base import BaseCallbackHandler as _BCH
+
         BaseCallbackHandler = _BCH
     except ImportError:
         try:
             from langchain.callbacks.base import BaseCallbackHandler as _BCH
+
             BaseCallbackHandler = _BCH
         except ImportError:
             return
 
     try:
         from langchain_core.tracers.context import register_configure_hook as _rch
+
         register_configure_hook = _rch
     except ImportError:
         try:
             from langchain_core.callbacks.manager import register_configure_hook as _rch
+
             register_configure_hook = _rch
         except ImportError:
             register_configure_hook = None
@@ -264,6 +307,7 @@ def patch_langchain():
 
     if register_configure_hook is not None:
         from contextvars import ContextVar
+
         cv: ContextVar = ContextVar("peekr_langchain_handler", default=None)
         cv.set(handler)
         try:

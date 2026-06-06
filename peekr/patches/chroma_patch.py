@@ -27,6 +27,7 @@ def _make_query_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -51,6 +52,7 @@ def _make_async_query_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -71,6 +73,7 @@ def _make_add_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -91,6 +94,7 @@ def _make_async_add_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -122,6 +126,7 @@ def patch_chroma():
     # ── also patch via chromadb.api.models.Collection if present ─────────────
     try:
         from chromadb.api.models.Collection import Collection as ModelCollection
+
         if not getattr(ModelCollection.query, "_peekr_patched", False):
             orig = ModelCollection.query
             ModelCollection.query = _make_query_patch(orig)
@@ -131,6 +136,7 @@ def patch_chroma():
 
     try:
         from chromadb.api.models.Collection import Collection as ModelCollection
+
         if not getattr(ModelCollection.add, "_peekr_patched", False):
             orig = ModelCollection.add
             ModelCollection.add = _make_add_patch(orig)
@@ -141,6 +147,7 @@ def patch_chroma():
     # ── async variant (AsyncCollection if present) ────────────────────────────
     try:
         from chromadb.api.async_api import AsyncCollection
+
         if not getattr(AsyncCollection.query, "_peekr_patched", False):
             orig = AsyncCollection.query
             AsyncCollection.query = _make_async_query_patch(orig)
@@ -150,6 +157,7 @@ def patch_chroma():
 
     try:
         from chromadb.api.async_api import AsyncCollection
+
         if not getattr(AsyncCollection.add, "_peekr_patched", False):
             orig = AsyncCollection.add
             AsyncCollection.add = _make_async_add_patch(orig)

@@ -9,6 +9,7 @@ from peekr.exporters import _exporters
 # Shared fixtures
 # ---------------------------------------------------------------------------
 
+
 class CollectingExporter:
     def __init__(self):
         self.spans = []
@@ -29,6 +30,7 @@ def isolated_exporters():
 # ---------------------------------------------------------------------------
 # List-variant tests
 # ---------------------------------------------------------------------------
+
 
 def test_list_variant_injected(isolated_exporters):
     """The 'variant' kwarg is injected automatically."""
@@ -99,6 +101,7 @@ def test_list_no_variant_config_injected(isolated_exporters):
 # Dict-variant tests
 # ---------------------------------------------------------------------------
 
+
 def test_dict_variant_and_config_injected(isolated_exporters):
     """Both variant and variant_config are injected for dict variants."""
     received = {}
@@ -145,6 +148,7 @@ def test_dict_tagged_on_span(isolated_exporters):
 # ---------------------------------------------------------------------------
 # Span / export tests
 # ---------------------------------------------------------------------------
+
 
 def test_span_exported(isolated_exporters):
     """Exactly one experiment span is exported per call."""
@@ -195,6 +199,7 @@ def test_span_status_error_on_exception(isolated_exporters):
 # ---------------------------------------------------------------------------
 # Async tests
 # ---------------------------------------------------------------------------
+
 
 def test_async_variant_injected(isolated_exporters):
 

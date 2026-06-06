@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from peekr.session import session, get_session_id, get_user_id
 
@@ -10,6 +9,7 @@ from peekr.session import session, get_session_id, get_user_id
 # ---------------------------------------------------------------------------
 # Basic context-manager behaviour
 # ---------------------------------------------------------------------------
+
 
 def test_session_sets_ids():
     with session(user_id="u1", session_id="s1"):
@@ -31,7 +31,7 @@ def test_session_default_user_id_is_none():
 
 
 def test_session_auto_generates_session_id():
-    with session(user_id="u1") as sess:
+    with session(user_id="u1"):
         sid = get_session_id()
     assert sid is not None
     assert len(sid) == 32  # uuid4().hex
@@ -40,7 +40,7 @@ def test_session_auto_generates_session_id():
 def test_session_auto_session_id_unique():
     sids = set()
     for _ in range(10):
-        with session() as s:
+        with session():
             sids.add(get_session_id())
     assert len(sids) == 10
 
@@ -58,6 +58,7 @@ def test_session_ids_not_visible_outside():
 # Nesting
 # ---------------------------------------------------------------------------
 
+
 def test_session_nesting_restores_outer():
     with session(user_id="outer-user", session_id="outer-sess"):
         assert get_session_id() == "outer-sess"
@@ -73,6 +74,7 @@ def test_session_nesting_restores_outer():
 # Exception safety
 # ---------------------------------------------------------------------------
 
+
 def test_session_clears_on_exception():
     try:
         with session(user_id="u3", session_id="s3"):
@@ -86,6 +88,7 @@ def test_session_clears_on_exception():
 # ---------------------------------------------------------------------------
 # Async support
 # ---------------------------------------------------------------------------
+
 
 def test_async_session_propagates():
     async def run():
@@ -123,6 +126,7 @@ def test_async_session_isolated_tasks():
 # Integration: spans created inside a session pick up session attributes
 # (requires context.py to read session vars — tested at unit level here)
 # ---------------------------------------------------------------------------
+
 
 def test_get_session_id_outside_session_returns_none():
     assert get_session_id() is None

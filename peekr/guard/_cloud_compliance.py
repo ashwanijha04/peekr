@@ -24,6 +24,7 @@ Or standalone::
     )
     peekr.instrument(guardrails=[guard])
 """
+
 from __future__ import annotations
 
 import re
@@ -59,8 +60,8 @@ class CloudComplianceGuard:
         Seconds to wait for the rule-fetch request. Default 10.
     """
 
-    _blocks:      bool = True   # post-storage, may raise
-    _input_guard: bool = True   # also run pre-call for prohibited_input rules
+    _blocks: bool = True  # post-storage, may raise
+    _input_guard: bool = True  # also run pre-call for prohibited_input rules
 
     def __init__(
         self,
@@ -73,19 +74,19 @@ class CloudComplianceGuard:
         if action not in ("raise", "warn"):
             raise ValueError(f"action must be 'raise' or 'warn'; got {action!r}")
 
-        self.action   = action
-        self._blocks  = (action == "raise")
-        self._packs   = packs
+        self.action = action
+        self._blocks = action == "raise"
+        self._packs = packs
         self._api_key = api_key
         self._endpoint = endpoint.rstrip("/")
-        self._timeout  = timeout
+        self._timeout = timeout
         self._rules_loaded = False
 
         # Populated on first use (lazy) so server startup is never blocked
-        self._output_rules:  list[tuple[re.Pattern, str, str]] = []
-        self._input_rules:   list[tuple[re.Pattern, str, str]] = []
-        self._disclosures:   list[tuple[str, str, str]] = []
-        self._pack_actions:  dict[str, str] = {}
+        self._output_rules: list[tuple[re.Pattern, str, str]] = []
+        self._input_rules: list[tuple[re.Pattern, str, str]] = []
+        self._disclosures: list[tuple[str, str, str]] = []
+        self._pack_actions: dict[str, str] = {}
 
     @property
     def name(self) -> str:
@@ -113,8 +114,8 @@ class CloudComplianceGuard:
             ) from e
 
         flags = re.IGNORECASE | re.DOTALL
-        packs_data  = data.get("packs", [])
-        rules_data  = data.get("rules", [])
+        packs_data = data.get("packs", [])
+        rules_data = data.get("rules", [])
 
         # Build pack→action map; filter by requested packs.
         # User-specified action is the ceiling — "warn" always wins over pack's "raise".
@@ -123,7 +124,9 @@ class CloudComplianceGuard:
             if self._packs is None or name in self._packs:
                 pack_action = p.get("action", self.action)
                 # If the user asked for "warn", never escalate to "raise"
-                self._pack_actions[name] = self.action if self.action == "warn" else pack_action
+                self._pack_actions[name] = (
+                    self.action if self.action == "warn" else pack_action
+                )
 
         enabled_packs = set(self._pack_actions.keys())
 
@@ -131,9 +134,9 @@ class CloudComplianceGuard:
             pack = rule.get("pack", "")
             if pack not in enabled_packs:
                 continue
-            rtype   = rule.get("rule_type", "")
+            rtype = rule.get("rule_type", "")
             pattern = rule.get("pattern", "")
-            desc    = rule.get("description", pattern[:80])
+            desc = rule.get("description", pattern[:80])
 
             if rtype == "prohibited_output":
                 try:
@@ -150,7 +153,9 @@ class CloudComplianceGuard:
             elif rtype == "required_disclosure":
                 self._disclosures.append((pattern, desc, pack))
 
-        total = len(self._output_rules) + len(self._input_rules) + len(self._disclosures)
+        total = (
+            len(self._output_rules) + len(self._input_rules) + len(self._disclosures)
+        )
         print(
             f"[peekr] CloudComplianceGuard: loaded {total} rules "
             f"across {len(enabled_packs)} pack(s): {', '.join(sorted(enabled_packs))}"
@@ -178,21 +183,25 @@ class CloudComplianceGuard:
         for pattern, desc, pack in self._output_rules:
             match = pattern.search(output)
             if match:
-                violations.append({
-                    "type": "prohibited_output",
-                    "pack": pack,
-                    "matched": match.group(0)[:100],
-                    "rule":   desc,
-                })
+                violations.append(
+                    {
+                        "type": "prohibited_output",
+                        "pack": pack,
+                        "matched": match.group(0)[:100],
+                        "rule": desc,
+                    }
+                )
 
         for text, desc, pack in self._disclosures:
             if not re.search(re.escape(text[:60]), output, re.IGNORECASE):
-                violations.append({
-                    "type":  "missing_disclosure",
-                    "pack":  pack,
-                    "matched": f"MISSING: '{text[:80]}'",
-                    "rule":  desc,
-                })
+                violations.append(
+                    {
+                        "type": "missing_disclosure",
+                        "pack": pack,
+                        "matched": f"MISSING: '{text[:80]}'",
+                        "rule": desc,
+                    }
+                )
 
         if not violations:
             return
@@ -201,12 +210,9 @@ class CloudComplianceGuard:
         span.attributes["compliance_violations"].extend(violations)
 
         # Respect per-pack action — raise if ANY pack is set to raise
-        should_raise = any(
-            self._pack_action(v["pack"]) == "raise" for v in violations
-        )
-        msg = (
-            "Compliance violation(s): "
-            + " | ".join(f"[{v['pack']}] {v['rule'][:60]}" for v in violations[:3])
+        should_raise = any(self._pack_action(v["pack"]) == "raise" for v in violations)
+        msg = "Compliance violation(s): " + " | ".join(
+            f"[{v['pack']}] {v['rule'][:60]}" for v in violations[:3]
         )
         if should_raise:
             raise GuardrailError(msg, guardrail_name=self.name, span=span)
@@ -220,8 +226,12 @@ class CloudComplianceGuard:
         for pattern, desc, pack in self._input_rules:
             match = pattern.search(prompt)
             if match:
-                v = {"type": "prohibited_input", "pack": pack,
-                     "matched": match.group(0)[:100], "rule": desc}
+                v = {
+                    "type": "prohibited_input",
+                    "pack": pack,
+                    "matched": match.group(0)[:100],
+                    "rule": desc,
+                }
                 span.attributes.setdefault("compliance_violations", [])
                 span.attributes["compliance_violations"].append(v)
                 if self._pack_action(pack) == "raise":

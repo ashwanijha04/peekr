@@ -32,9 +32,9 @@ class _BedrockStreamWrapper:
                     inp = usage.get("inputTokens", 0)
                     out = usage.get("outputTokens", 0)
                     if inp or out:
-                        self._span.attributes["tokens_input"]  = inp
+                        self._span.attributes["tokens_input"] = inp
                         self._span.attributes["tokens_output"] = out
-                        self._span.attributes["tokens_total"]  = inp + out
+                        self._span.attributes["tokens_total"] = inp + out
                 yield event
             self._span.status = "ok"
         except Exception as e:
@@ -77,6 +77,7 @@ def patch_bedrock():
         span.attributes["model"] = api_params.get("modelId", "unknown")
         try:
             from ..eval import _in_eval as _peekr_in_eval
+
             if _peekr_in_eval.get():
                 span.attributes["peekr.internal"] = True
         except Exception:  # pragma: no cover
@@ -85,7 +86,9 @@ def patch_bedrock():
         messages = api_params.get("messages", [])
         if messages:
             prompt = json.dumps(messages, default=str)
-            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            span.attributes["input"] = (
+                prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            )
 
         system = api_params.get("system")
         if system:
@@ -102,13 +105,15 @@ def patch_bedrock():
 
             usage = result.get("usage", {})
             if usage:
-                span.attributes["tokens_input"]  = usage.get("inputTokens", 0)
+                span.attributes["tokens_input"] = usage.get("inputTokens", 0)
                 span.attributes["tokens_output"] = usage.get("outputTokens", 0)
-                span.attributes["tokens_total"]  = usage.get("totalTokens", 0)
+                span.attributes["tokens_total"] = usage.get("totalTokens", 0)
 
             try:
                 output = result["output"]["message"]["content"][0]["text"]
-                span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                span.attributes["output"] = (
+                    output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                )
             except (KeyError, IndexError, TypeError):
                 pass
 

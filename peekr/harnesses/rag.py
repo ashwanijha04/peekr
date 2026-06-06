@@ -45,9 +45,9 @@ You can also set the context manually::
     with harness.context(docs):
         response = client.chat.completions.create(...)
 """
+
 from __future__ import annotations
 
-import asyncio
 import functools
 import inspect
 import json
@@ -131,16 +131,21 @@ class RAGHarness:
         Also stores the docs in a ContextVar so the Hallucination evaluator
         can use them as grounding context automatically.
         """
+
         def decorator(fn: Callable) -> Callable:
             if inspect.iscoroutinefunction(fn):
+
                 @functools.wraps(fn)
                 async def async_wrap(*args, **kwargs):
                     return await _run_retrieve(fn, args, kwargs, name, is_async=True)
+
                 return async_wrap
             else:
+
                 @functools.wraps(fn)
                 def sync_wrap(*args, **kwargs):
                     return _run_retrieve_sync(fn, args, kwargs, name)
+
                 return sync_wrap
 
         if func is not None:
@@ -156,16 +161,21 @@ class RAGHarness:
                                      value from @retrieve so the evaluator uses
                                      the post-rerank context)
         """
+
         def decorator(fn: Callable) -> Callable:
             if inspect.iscoroutinefunction(fn):
+
                 @functools.wraps(fn)
                 async def async_wrap(*args, **kwargs):
                     return await _run_retrieve(fn, args, kwargs, name, is_async=True)
+
                 return async_wrap
             else:
+
                 @functools.wraps(fn)
                 def sync_wrap(*args, **kwargs):
                     return _run_retrieve_sync(fn, args, kwargs, name)
+
                 return sync_wrap
 
         if func is not None:
@@ -179,6 +189,7 @@ class RAGHarness:
         Use this if you want to wrap the whole generate() function as a parent span.
         """
         from ..decorators import trace
+
         if func is not None:
             return trace(func, name=name)
         return trace(name=name)
@@ -283,7 +294,6 @@ def instrument_rag(
         Use ``@harness.retrieve`` and ``@harness.rerank`` on your pipeline steps.
     """
     from ..eval.hallucination import Hallucination
-    from ..alerts import ErrorRate
 
     hallucination_eval = Hallucination(
         context_extractor=_rag_context_extractor,
@@ -293,6 +303,7 @@ def instrument_rag(
     alerts = instrument_kwargs.pop("alerts", [])
 
     import peekr as _peekr
+
     _peekr.instrument(
         exporter=exporter,
         console=console,

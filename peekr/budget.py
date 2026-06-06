@@ -41,6 +41,7 @@ from typing import Any, Callable, Optional
 # Exceptions
 # ---------------------------------------------------------------------------
 
+
 class BudgetExceededError(Exception):
     """Raised (and optionally a callback is fired) when rolling spend >= limit_usd."""
 
@@ -50,23 +51,23 @@ class BudgetExceededError(Exception):
 # ---------------------------------------------------------------------------
 
 _PRICING: dict[str, tuple[float, float]] = {
-    "gpt-4o-mini":       (0.15,  0.60),
-    "gpt-4o":            (2.50, 10.00),
-    "gpt-4-turbo":       (10.0,  30.0),
-    "gpt-4":             (30.0,  60.0),
-    "gpt-3.5":           (0.50,   1.50),
-    "claude-3-5-sonnet": (3.0,   15.0),
-    "claude-3-opus":     (15.0,  75.0),
-    "claude-3-haiku":    (0.25,   1.25),
-    "claude-sonnet-4":   (3.0,   15.0),
-    "gemini-1.5-pro":    (1.25,   5.0),
-    "gemini-1.5-flash":  (0.075,  0.30),
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4o": (2.50, 10.00),
+    "gpt-4-turbo": (10.0, 30.0),
+    "gpt-4": (30.0, 60.0),
+    "gpt-3.5": (0.50, 1.50),
+    "claude-3-5-sonnet": (3.0, 15.0),
+    "claude-3-opus": (15.0, 75.0),
+    "claude-3-haiku": (0.25, 1.25),
+    "claude-sonnet-4": (3.0, 15.0),
+    "gemini-1.5-pro": (1.25, 5.0),
+    "gemini-1.5-flash": (0.075, 0.30),
 }
 
 # Window durations in seconds
 _WINDOW_SECONDS: dict[str, float] = {
-    "hour":  3_600.0,
-    "day":  86_400.0,
+    "hour": 3_600.0,
+    "day": 86_400.0,
     "month": 2_592_000.0,  # 30 days
 }
 
@@ -74,6 +75,7 @@ _WINDOW_SECONDS: dict[str, float] = {
 # ---------------------------------------------------------------------------
 # BudgetAlert
 # ---------------------------------------------------------------------------
+
 
 class BudgetAlert:
     """Rolling-cost budget guard that fires callbacks at warning and hard-limit.
@@ -121,9 +123,13 @@ class BudgetAlert:
         if limit_usd <= 0:
             raise ValueError("BudgetAlert: limit_usd must be > 0")
         if window not in _WINDOW_SECONDS:
-            raise ValueError(f"BudgetAlert: window must be one of {list(_WINDOW_SECONDS)}")
+            raise ValueError(
+                f"BudgetAlert: window must be one of {list(_WINDOW_SECONDS)}"
+            )
         if not (0.0 < warning_pct < 1.0):
-            raise ValueError("BudgetAlert: warning_pct must be between 0 and 1 (exclusive)")
+            raise ValueError(
+                "BudgetAlert: warning_pct must be between 0 and 1 (exclusive)"
+            )
 
         self.limit_usd = limit_usd
         self.on_warning = on_warning
@@ -285,6 +291,7 @@ class BudgetAlert:
 # ---------------------------------------------------------------------------
 # Convenience factory
 # ---------------------------------------------------------------------------
+
 
 def budget_alert(
     limit_usd: float,

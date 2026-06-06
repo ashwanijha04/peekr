@@ -24,10 +24,10 @@ Usage::
     print(prompt.content)     # raw template string
     print(prompt.model)       # pinned model or None
 """
+
 from __future__ import annotations
 
 import os
-import re
 import urllib.error
 import urllib.request
 import json
@@ -48,12 +48,12 @@ class Prompt:
         model: str | None,
         notes: str | None,
     ) -> None:
-        self.name      = name
-        self.version   = version
-        self.content   = content
+        self.name = name
+        self.version = version
+        self.content = content
         self.variables = variables
-        self.model     = model
-        self.notes     = notes
+        self.model = model
+        self.notes = notes
 
     def render(self, **kwargs: Any) -> str:
         """Replace ``{{variable}}`` placeholders with provided values.
@@ -121,7 +121,9 @@ def get(
             "Peekr API key required. Pass api_key= or set PEEKR_API_KEY env var."
         )
 
-    base = (endpoint or os.environ.get("PEEKR_ENDPOINT") or _DEFAULT_ENDPOINT).rstrip("/")
+    base = (endpoint or os.environ.get("PEEKR_ENDPOINT") or _DEFAULT_ENDPOINT).rstrip(
+        "/"
+    )
     url = f"{base}/api/v1/prompts?name={urllib.request.quote(name)}"
 
     req = urllib.request.Request(
@@ -149,12 +151,12 @@ def get(
         raise RuntimeError(f"Peekr request failed: {e}") from e
 
     return Prompt(
-        name      = data.get("name", name),
-        version   = data.get("version", 0),
-        content   = data.get("content", ""),
-        variables = data.get("variables", []),
-        model     = data.get("model"),
-        notes     = data.get("notes"),
+        name=data.get("name", name),
+        version=data.get("version", 0),
+        content=data.get("content", ""),
+        variables=data.get("variables", []),
+        model=data.get("model"),
+        notes=data.get("notes"),
     )
 
 
@@ -172,7 +174,9 @@ def list_all(
     if not key:
         raise ValueError("Peekr API key required.")
 
-    base = (endpoint or os.environ.get("PEEKR_ENDPOINT") or _DEFAULT_ENDPOINT).rstrip("/")
+    base = (endpoint or os.environ.get("PEEKR_ENDPOINT") or _DEFAULT_ENDPOINT).rstrip(
+        "/"
+    )
     req = urllib.request.Request(
         f"{base}/api/v1/prompts",
         headers={"Authorization": f"Bearer {key}", "User-Agent": "peekr-python"},

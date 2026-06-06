@@ -37,14 +37,19 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("url",        re.compile(r"https?://[^\s)>\]]+")),
-    ("arxiv",      re.compile(r"\barXiv\s*:\s*\d{4}\.\d{4,5}\b", re.IGNORECASE)),
-    ("doi",        re.compile(r"\b10\.\d{4,9}/[\w\-./;:()]+\b")),
+    ("url", re.compile(r"https?://[^\s)>\]]+")),
+    ("arxiv", re.compile(r"\barXiv\s*:\s*\d{4}\.\d{4,5}\b", re.IGNORECASE)),
+    ("doi", re.compile(r"\b10\.\d{4,9}/[\w\-./;:()]+\b")),
     # "Smith et al., 2018" or "Smith et al. (2018)"
-    ("author_year", re.compile(r"\b[A-Z][a-z]+(?:-[A-Z][a-z]+)?\s+et\s+al\.?,?\s*\(?\s*(19|20)\d{2}\s*\)?")),
+    (
+        "author_year",
+        re.compile(
+            r"\b[A-Z][a-z]+(?:-[A-Z][a-z]+)?\s+et\s+al\.?,?\s*\(?\s*(19|20)\d{2}\s*\)?"
+        ),
+    ),
     # Statute / section references — "Section 230", "§ 7", "Title VII".
     # No \b on the § alternative — § is non-word so a word boundary won't match it.
-    ("section",    re.compile(r"(?:\bSection\s*|§\s*)\d+[A-Za-z]?\b")),
+    ("section", re.compile(r"(?:\bSection\s*|§\s*)\d+[A-Za-z]?\b")),
     # Paper / book titles in quotes — REQUIRE a citation-shaped preamble like
     # "in 'X'", "titled 'X'", "from 'X'", "see 'X'", "cited in 'X'", "per 'X'".
     # Without this guard, any product name or claim string in quoted output
@@ -168,12 +173,11 @@ class CitationAccuracy(BaseEvaluator):
 
         # Record per-citation detail on the span so dashboards can drill in.
         span.attributes["citation_details"] = {
-            "total":     len(citations),
-            "grounded":  len(grounded),
-            "invented":  len(invented),
-            "items":     [
-                {**c, "grounded": _is_grounded(c, context_norm)}
-                for c in citations
+            "total": len(citations),
+            "grounded": len(grounded),
+            "invented": len(invented),
+            "items": [
+                {**c, "grounded": _is_grounded(c, context_norm)} for c in citations
             ],
         }
         return len(grounded) / len(citations)

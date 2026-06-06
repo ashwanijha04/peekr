@@ -1,6 +1,4 @@
 import json
-import os
-import tempfile
 import threading
 import pytest
 from peekr.span import Span
@@ -19,7 +17,9 @@ def db(tmp_path):
 
 
 def test_creates_table(db):
-    rows = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='spans'")
+    rows = db.query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='spans'"
+    )
     assert rows, "spans table not created"
 
 

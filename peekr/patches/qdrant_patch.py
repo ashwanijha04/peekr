@@ -24,6 +24,7 @@ def _make_search_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -45,6 +46,7 @@ def _make_async_search_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -66,6 +68,7 @@ def _make_upsert_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -87,6 +90,7 @@ def _make_async_upsert_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -116,6 +120,7 @@ def patch_qdrant():
     # ── async QdrantClient (AsyncQdrantClient) ────────────────────────────────
     try:
         from qdrant_client import AsyncQdrantClient
+
         if not getattr(AsyncQdrantClient.search, "_peekr_patched", False):
             orig = AsyncQdrantClient.search
             AsyncQdrantClient.search = _make_async_search_patch(orig)
@@ -125,6 +130,7 @@ def patch_qdrant():
 
     try:
         from qdrant_client import AsyncQdrantClient
+
         if not getattr(AsyncQdrantClient.upsert, "_peekr_patched", False):
             orig = AsyncQdrantClient.upsert
             AsyncQdrantClient.upsert = _make_async_upsert_patch(orig)

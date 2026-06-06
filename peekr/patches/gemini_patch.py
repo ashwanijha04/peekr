@@ -6,6 +6,7 @@ and the legacy ``google-generativeai`` SDK (``genai.GenerativeModel(...).generat
 Captures: model, prompt, response text, prompt/output/total tokens.
 Streaming responses are wrapped so token usage is captured at stream-end.
 """
+
 from __future__ import annotations
 
 import json
@@ -55,10 +56,7 @@ def _extract_usage(response: Any) -> dict[str, int]:
         or getattr(usage, "output_token_count", 0)
         or 0
     )
-    total = (
-        getattr(usage, "total_token_count", None)
-        or (prompt + output)
-    )
+    total = getattr(usage, "total_token_count", None) or (prompt + output)
     return {
         "tokens_input": prompt,
         "tokens_output": output,
@@ -236,16 +234,35 @@ def _patch_google_genai() -> None:
     # ── sync Models ────────────────────────────────────────────────────────
     Models = getattr(_models_mod, "Models", None)
     if Models is not None:
-        _patch_method(Models, "generate_content",        _wrap_generate, "gemini.generate_content")
-        _patch_method(Models, "generate_content_stream", _wrap_generate, "gemini.generate_content_stream")
-        _patch_method(Models, "embed_content",           _wrap_generate, "gemini.embed_content")
+        _patch_method(
+            Models, "generate_content", _wrap_generate, "gemini.generate_content"
+        )
+        _patch_method(
+            Models,
+            "generate_content_stream",
+            _wrap_generate,
+            "gemini.generate_content_stream",
+        )
+        _patch_method(Models, "embed_content", _wrap_generate, "gemini.embed_content")
 
     # ── async AsyncModels ──────────────────────────────────────────────────
     AsyncModels = getattr(_models_mod, "AsyncModels", None)
     if AsyncModels is not None:
-        _patch_method(AsyncModels, "generate_content",        _wrap_async_generate, "gemini.generate_content")
-        _patch_method(AsyncModels, "generate_content_stream", _wrap_async_generate, "gemini.generate_content_stream")
-        _patch_method(AsyncModels, "embed_content",           _wrap_async_generate, "gemini.embed_content")
+        _patch_method(
+            AsyncModels,
+            "generate_content",
+            _wrap_async_generate,
+            "gemini.generate_content",
+        )
+        _patch_method(
+            AsyncModels,
+            "generate_content_stream",
+            _wrap_async_generate,
+            "gemini.generate_content_stream",
+        )
+        _patch_method(
+            AsyncModels, "embed_content", _wrap_async_generate, "gemini.embed_content"
+        )
 
 
 def _patch_google_generativeai() -> None:
@@ -260,6 +277,8 @@ def _patch_google_generativeai() -> None:
 
     if not getattr(GenerativeModel.generate_content, "_peekr_patched", False):
         original = GenerativeModel.generate_content
-        wrapped = _wrap_generate(original, is_method=True, name="gemini.generate_content")
+        wrapped = _wrap_generate(
+            original, is_method=True, name="gemini.generate_content"
+        )
         wrapped._peekr_patched = True  # type: ignore[attr-defined]
         GenerativeModel.generate_content = wrapped

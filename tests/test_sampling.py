@@ -15,6 +15,7 @@ These tests verify:
   - Statistical sanity check at ~50%
   - validation of sample_rate bounds
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -32,9 +33,11 @@ from peekr.span import Span
 # Test helpers
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
-def _isolated_sampling(sample_rate: Optional[float] = None,
-                       keep_errors: Optional[bool] = None):
+def _isolated_sampling(
+    sample_rate: Optional[float] = None, keep_errors: Optional[bool] = None
+):
     """Reset sampling defaults around a test, plus clear exporters + contextvar."""
     saved = (ctx._sample_rate, ctx._keep_errors)
     saved_exporters = list(_exporters)
@@ -54,6 +57,7 @@ def _isolated_sampling(sample_rate: Optional[float] = None,
 
 class _StorageExporter:
     """Marker-bearing capture exporter for tests."""
+
     _is_storage = True
 
     def __init__(self):
@@ -91,6 +95,7 @@ def _drive_trace(*, n_children: int = 2, child_status: str = "ok") -> None:
 # 1. Default behaviour — keep everything
 # ---------------------------------------------------------------------------
 
+
 class TestDefaults:
     def test_full_sample_rate_keeps_everything(self):
         with _isolated_sampling(sample_rate=1.0):
@@ -111,6 +116,7 @@ class TestDefaults:
 # ---------------------------------------------------------------------------
 # 2. Sampling drops storage spans; mutators still see them
 # ---------------------------------------------------------------------------
+
 
 class TestSampling:
     def test_zero_rate_drops_all_non_error_spans(self):
@@ -151,6 +157,7 @@ class TestSampling:
 # 3. Trace coherence — children inherit the root decision
 # ---------------------------------------------------------------------------
 
+
 class TestTraceCoherence:
     def test_all_children_of_kept_trace_are_kept(self):
         with _isolated_sampling(sample_rate=1.0):
@@ -172,6 +179,7 @@ class TestTraceCoherence:
 # 4. Statistical sanity at 50%
 # ---------------------------------------------------------------------------
 
+
 class TestStatistical:
     def test_fifty_percent_rate_is_roughly_half(self):
         with _isolated_sampling(sample_rate=0.5):
@@ -187,7 +195,11 @@ class TestStatistical:
                 end_span(root, tok)
                 export_span(root)
                 ctx._trace_sample_keep.reset(token)
-                if cap.spans and cap.spans[-1].name == "root" and len(cap.spans) > kept_traces:
+                if (
+                    cap.spans
+                    and cap.spans[-1].name == "root"
+                    and len(cap.spans) > kept_traces
+                ):
                     kept_traces = len(cap.spans)
             # 99.999% CI for binomial(400, 0.5) is roughly 150–250
             assert 150 <= kept_traces <= 250, f"got {kept_traces} kept of {n}"
@@ -196,6 +208,7 @@ class TestStatistical:
 # ---------------------------------------------------------------------------
 # 5. Validation
 # ---------------------------------------------------------------------------
+
 
 class TestValidation:
     def test_rejects_negative_rate(self):

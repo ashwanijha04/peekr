@@ -3,7 +3,13 @@ import os
 import tempfile
 import pytest
 from peekr.span import Span
-from peekr.exporters import JSONLExporter, ConsoleExporter, _exporters, add_exporter, export_span
+from peekr.exporters import (
+    JSONLExporter,
+    ConsoleExporter,
+    _exporters,
+    add_exporter,
+    export_span,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +33,7 @@ def test_jsonl_exporter_writes_line():
         exporter.export(make_span("op.one"))
         exporter.export(make_span("op.two"))
         with open(path) as f:
-            lines = [json.loads(l) for l in f]
+            lines = [json.loads(line) for line in f]
         assert len(lines) == 2
         assert lines[0]["name"] == "op.one"
         assert lines[1]["name"] == "op.two"

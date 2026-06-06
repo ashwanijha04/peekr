@@ -1,5 +1,5 @@
 import asyncio
-from peekr.context import start_span, end_span, get_current_span, get_or_create_trace_id
+from peekr.context import start_span, end_span, get_current_span
 
 
 def test_no_active_span():

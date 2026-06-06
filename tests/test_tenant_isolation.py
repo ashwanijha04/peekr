@@ -28,7 +28,10 @@ from peekr.span import Span
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_llm_span(tenant: str, output: str, input_text: str = "ctx", trace_id: str | None = None) -> Span:
+
+def make_llm_span(
+    tenant: str, output: str, input_text: str = "ctx", trace_id: str | None = None
+) -> Span:
     s = Span(name="openai.chat.completions", trace_id=trace_id or f"trace-{tenant}")
     s.attributes["input"] = input_text
     s.attributes["output"] = output
@@ -47,10 +50,11 @@ def fake_judge(score_text: str) -> MagicMock:
 # 1. Eval scores never leak between spans
 # ---------------------------------------------------------------------------
 
+
 class TestEvalScoreIsolation:
     def test_scores_attach_only_to_their_own_span(self):
         """EvalExporter writes scores onto the span passed in; never onto siblings."""
-        s_a = make_llm_span("acme",   output="answer A")
+        s_a = make_llm_span("acme", output="answer A")
         s_b = make_llm_span("globex", output="answer B")
 
         with patch("peekr.eval._judge.openai") as mock_oai:
@@ -71,28 +75,64 @@ class TestEvalScoreIsolation:
 
     def test_detailed_breakdown_does_not_leak(self):
         """A detailed-mode breakdown is only written onto the span it belongs to."""
-        s_a = make_llm_span("acme",   output="A invented Frank Lloyd Wright designed it")
+        s_a = make_llm_span("acme", output="A invented Frank Lloyd Wright designed it")
         s_b = make_llm_span("globex", output="B is factually correct")
 
         responses = [
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"claims": [
-                {"text": "Frank Lloyd Wright designed it", "verdict": "contradicted"},
-            ]})))]),
-            MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"claims": [
-                {"text": "B is correct", "verdict": "supported"},
-            ]})))]),
+            MagicMock(
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content=json.dumps(
+                                {
+                                    "claims": [
+                                        {
+                                            "text": "Frank Lloyd Wright designed it",
+                                            "verdict": "contradicted",
+                                        },
+                                    ]
+                                }
+                            )
+                        )
+                    )
+                ]
+            ),
+            MagicMock(
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content=json.dumps(
+                                {
+                                    "claims": [
+                                        {
+                                            "text": "B is correct",
+                                            "verdict": "supported",
+                                        },
+                                    ]
+                                }
+                            )
+                        )
+                    )
+                ]
+            ),
         ]
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = responses
-            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(detailed=True)])
+            exporter = EvalExporter(
+                async_eval=False, evaluators=[Hallucination(detailed=True)]
+            )
             exporter.export(s_a)
             exporter.export(s_b)
 
         assert s_a.attributes["hallucination_details"]["contradicted"] == 1
         assert s_b.attributes["hallucination_details"]["supported"] == 1
         # The other tenant's claims must NOT appear on this span
-        a_claims = [c["text"] for c in s_a.attributes["hallucination_details"]["claims"]]
-        b_claims = [c["text"] for c in s_b.attributes["hallucination_details"]["claims"]]
+        a_claims = [
+            c["text"] for c in s_a.attributes["hallucination_details"]["claims"]
+        ]
+        b_claims = [
+            c["text"] for c in s_b.attributes["hallucination_details"]["claims"]
+        ]
         assert "B is correct" not in a_claims
         assert "Frank Lloyd Wright designed it" not in b_claims
 
@@ -101,11 +141,14 @@ class TestEvalScoreIsolation:
 # 2. Concurrent evaluation across tenants
 # ---------------------------------------------------------------------------
 
+
 class TestConcurrentTenants:
     def test_threaded_evaluation_keeps_scores_on_correct_spans(self):
         """Run many tenants in parallel threads; nothing should cross-contaminate."""
         n_tenants = 25
-        spans = [make_llm_span(f"tenant_{i}", output=f"answer-{i}") for i in range(n_tenants)]
+        spans = [
+            make_llm_span(f"tenant_{i}", output=f"answer-{i}") for i in range(n_tenants)
+        ]
 
         # Each judge call returns a score uniquely tied to the tenant index.
         # We can't reuse `side_effect` (order isn't deterministic across threads),
@@ -117,22 +160,29 @@ class TestConcurrentTenants:
                 if "answer-" in line:
                     i = int(line.split("answer-")[1].split()[0].strip("."))
                     score = round(i / n_tenants, 3)
-                    return MagicMock(choices=[MagicMock(message=MagicMock(content=str(score)))])
+                    return MagicMock(
+                        choices=[MagicMock(message=MagicMock(content=str(score)))]
+                    )
             return MagicMock(choices=[MagicMock(message=MagicMock(content="0.5"))])
 
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = judge
 
             exporter = EvalExporter(async_eval=False, evaluators=[Hallucination()])
-            threads = [threading.Thread(target=exporter.export, args=(s,)) for s in spans]
-            for t in threads: t.start()
-            for t in threads: t.join()
+            threads = [
+                threading.Thread(target=exporter.export, args=(s,)) for s in spans
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
         for i, span in enumerate(spans):
             expected = round(i / n_tenants, 3)
             actual = span.attributes["eval_scores"]["Hallucination"]
-            assert actual == pytest.approx(expected, abs=1e-3), \
+            assert actual == pytest.approx(expected, abs=1e-3), (
                 f"Tenant {i} got score {actual} instead of {expected} — leak!"
+            )
             assert span.attributes["user_id"] == f"tenant_{i}"
 
     def test_async_evaluation_isolated_per_session(self):
@@ -162,33 +212,37 @@ class TestConcurrentTenants:
 # 3. Dashboard / cost-report filtering by tenant
 # ---------------------------------------------------------------------------
 
+
 class TestDashboardTenantFilter:
     def _multi_tenant_corpus(self, tmp_path):
         """Two tenants, very different score distributions."""
         import time
+
         t0 = time.time()
         spans = []
         for i in range(20):
             tenant = "acme" if i % 2 == 0 else "globex"
             score = 0.95 if tenant == "acme" else 0.25
-            spans.append({
-                "name": "openai.chat.completions",
-                "trace_id": f"trace-{i}",
-                "span_id": f"span-{i}",
-                "parent_id": None,
-                "start_time": t0 + i,
-                "end_time": t0 + i + 0.3,
-                "duration_ms": 300.0,
-                "status": "ok",
-                "attributes": {
-                    "model": "gpt-4o-mini",
-                    "user_id": tenant,
-                    "input": "Q?",
-                    "output": f"A{i}",
-                    "tokens_total": 100,
-                    "eval_scores": {"Hallucination": score},
-                },
-            })
+            spans.append(
+                {
+                    "name": "openai.chat.completions",
+                    "trace_id": f"trace-{i}",
+                    "span_id": f"span-{i}",
+                    "parent_id": None,
+                    "start_time": t0 + i,
+                    "end_time": t0 + i + 0.3,
+                    "duration_ms": 300.0,
+                    "status": "ok",
+                    "attributes": {
+                        "model": "gpt-4o-mini",
+                        "user_id": tenant,
+                        "input": "Q?",
+                        "output": f"A{i}",
+                        "tokens_total": 100,
+                        "eval_scores": {"Hallucination": score},
+                    },
+                }
+            )
         path = tmp_path / "traces.jsonl"
         with open(path, "w") as f:
             for s in spans:
@@ -198,32 +252,35 @@ class TestDashboardTenantFilter:
     def test_dashboard_computes_unfiltered_drift(self, tmp_path):
         """Sanity: full corpus shows a mid-range average across tenants."""
         from peekr.dashboard import _drift
+
         _, spans = self._multi_tenant_corpus(tmp_path)
         d = _drift(spans)["Hallucination"]
         assert d is not None
-        assert 0.5 < d["baseline"] < 0.7   # mix of 0.95 and 0.25 averages near 0.6
+        assert 0.5 < d["baseline"] < 0.7  # mix of 0.95 and 0.25 averages near 0.6
 
     def test_per_tenant_drift_segregates_correctly(self, tmp_path):
         """Filter by tenant; drift numbers must match that tenant alone."""
         from peekr.dashboard import _drift
+
         _, spans = self._multi_tenant_corpus(tmp_path)
 
-        acme   = [s for s in spans if s["attributes"].get("user_id") == "acme"]
+        acme = [s for s in spans if s["attributes"].get("user_id") == "acme"]
         globex = [s for s in spans if s["attributes"].get("user_id") == "globex"]
 
-        d_acme   = _drift(acme)["Hallucination"]
+        d_acme = _drift(acme)["Hallucination"]
         d_globex = _drift(globex)["Hallucination"]
         # Acme is uniformly 0.95, Globex uniformly 0.25
-        assert d_acme["baseline"]   == pytest.approx(0.95)
-        assert d_acme["current"]    == pytest.approx(0.95)
+        assert d_acme["baseline"] == pytest.approx(0.95)
+        assert d_acme["current"] == pytest.approx(0.95)
         assert d_globex["baseline"] == pytest.approx(0.25)
-        assert d_globex["current"]  == pytest.approx(0.25)
+        assert d_globex["current"] == pytest.approx(0.25)
         # No bleed: one tenant's score must never show up in the other's window
         assert abs(d_acme["baseline"] - d_globex["baseline"]) > 0.5
 
     def test_worst_offenders_per_tenant(self, tmp_path):
         """A worst-offenders table built from one tenant's spans must not contain the other tenant's data."""
         from peekr.dashboard import _worst_offenders
+
         _, spans = self._multi_tenant_corpus(tmp_path)
 
         globex = [s for s in spans if s["attributes"].get("user_id") == "globex"]

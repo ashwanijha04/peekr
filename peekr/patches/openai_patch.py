@@ -17,6 +17,7 @@ def _extract_text(choice) -> str:
 def _mark_eval_span(span) -> None:
     try:
         from ..eval import _in_eval as _peekr_in_eval
+
         if _peekr_in_eval.get():
             span.attributes["peekr.internal"] = True
     except Exception:
@@ -36,9 +37,9 @@ class _OpenAIStreamWrapper:
             for chunk in self._stream:
                 usage = getattr(chunk, "usage", None)
                 if usage:
-                    self._span.attributes["tokens_input"]  = usage.prompt_tokens
+                    self._span.attributes["tokens_input"] = usage.prompt_tokens
                     self._span.attributes["tokens_output"] = usage.completion_tokens
-                    self._span.attributes["tokens_total"]  = usage.total_tokens
+                    self._span.attributes["tokens_total"] = usage.total_tokens
                 try:
                     delta = chunk.choices[0].delta.content
                     if delta:
@@ -48,7 +49,9 @@ class _OpenAIStreamWrapper:
                 yield chunk
             if self._parts:
                 out = "".join(self._parts)
-                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                self._span.attributes["output"] = (
+                    out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                )
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -95,9 +98,9 @@ class _AsyncOpenAIStreamWrapper:
             async for chunk in self._stream:
                 usage = getattr(chunk, "usage", None)
                 if usage:
-                    self._span.attributes["tokens_input"]  = usage.prompt_tokens
+                    self._span.attributes["tokens_input"] = usage.prompt_tokens
                     self._span.attributes["tokens_output"] = usage.completion_tokens
-                    self._span.attributes["tokens_total"]  = usage.total_tokens
+                    self._span.attributes["tokens_total"] = usage.total_tokens
                 try:
                     delta = chunk.choices[0].delta.content
                     if delta:
@@ -107,7 +110,9 @@ class _AsyncOpenAIStreamWrapper:
                 yield chunk
             if self._parts:
                 out = "".join(self._parts)
-                self._span.attributes["output"] = out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                self._span.attributes["output"] = (
+                    out[:_TRUNCATE] + "…" if len(out) > _TRUNCATE else out
+                )
             self._span.status = "ok"
         except Exception as e:
             self._span.status = "error"
@@ -141,7 +146,7 @@ class _AsyncOpenAIStreamWrapper:
 def _make_chat_patch(original):
     def patched(self_or_first, *args, **kwargs):
         # Works for both bound (instance) and unbound calls
-        if callable(getattr(self_or_first, 'model', None)):
+        if callable(getattr(self_or_first, "model", None)):
             # called as unbound — self_or_first IS the instance
             bound_args = args
             bound_self = self_or_first
@@ -155,7 +160,9 @@ def _make_chat_patch(original):
         messages = kwargs.get("messages", [])
         if messages:
             prompt = json.dumps(messages, default=str)
-            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            span.attributes["input"] = (
+                prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            )
         is_streaming = kwargs.get("stream", False)
         if is_streaming:
             opts = dict(kwargs.get("stream_options") or {})
@@ -171,12 +178,14 @@ def _make_chat_patch(original):
                 return _OpenAIStreamWrapper(result, span, token)
             usage = getattr(result, "usage", None)
             if usage:
-                span.attributes["tokens_input"]  = usage.prompt_tokens
+                span.attributes["tokens_input"] = usage.prompt_tokens
                 span.attributes["tokens_output"] = usage.completion_tokens
-                span.attributes["tokens_total"]  = usage.total_tokens
+                span.attributes["tokens_total"] = usage.total_tokens
             if result.choices:
                 output = _extract_text(result.choices[0])
-                span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                span.attributes["output"] = (
+                    output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                )
             span.status = "ok"
             return result
         except GuardrailError:
@@ -189,6 +198,7 @@ def _make_chat_patch(original):
             if not is_streaming:
                 end_span(span, token)
                 export_span(span)
+
     return patched
 
 
@@ -200,7 +210,9 @@ def _make_async_chat_patch(original):
         messages = kwargs.get("messages", [])
         if messages:
             prompt = json.dumps(messages, default=str)
-            span.attributes["input"] = prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            span.attributes["input"] = (
+                prompt[:_TRUNCATE] + "…" if len(prompt) > _TRUNCATE else prompt
+            )
         is_streaming = kwargs.get("stream", False)
         if is_streaming:
             opts = dict(kwargs.get("stream_options") or {})
@@ -213,12 +225,14 @@ def _make_async_chat_patch(original):
                 return _AsyncOpenAIStreamWrapper(result, span, token)
             usage = getattr(result, "usage", None)
             if usage:
-                span.attributes["tokens_input"]  = usage.prompt_tokens
+                span.attributes["tokens_input"] = usage.prompt_tokens
                 span.attributes["tokens_output"] = usage.completion_tokens
-                span.attributes["tokens_total"]  = usage.total_tokens
+                span.attributes["tokens_total"] = usage.total_tokens
             if result.choices:
                 output = _extract_text(result.choices[0])
-                span.attributes["output"] = output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                span.attributes["output"] = (
+                    output[:_TRUNCATE] + "…" if len(output) > _TRUNCATE else output
+                )
             span.status = "ok"
             return result
         except GuardrailError:
@@ -231,6 +245,7 @@ def _make_async_chat_patch(original):
             if not is_streaming:
                 end_span(span, token)
                 export_span(span)
+
     return patched
 
 
@@ -260,6 +275,7 @@ def _make_embed_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -289,6 +305,7 @@ def _make_async_embed_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 

@@ -22,11 +22,11 @@ from peekr.span import Span
 # Fix 1 — Anthropic system prompt visible in dashboard rows
 # ---------------------------------------------------------------------------
 
+
 class TestFix1AnthropicSystemPrompt:
     def test_patch_prepends_system_into_input_messages(self):
         """The Anthropic patch should merge `system=...` into messages as
         role=system so OpenAI-shaped consumers (dashboard) see it."""
-        import peekr.patches.anthropic_patch as ap
 
         # Simulate what the patch does: build a synthetic span the way the
         # patched_create function does, then verify the input shape.
@@ -40,13 +40,19 @@ class TestFix1AnthropicSystemPrompt:
         s.attributes["system"] = system  # backward-compat
 
         # Now exercise the dashboard's _rows + parseInput.
-        spans = [{
-            "name": "anthropic.messages",
-            "trace_id": "t1", "span_id": "s1", "parent_id": None,
-            "start_time": 0, "end_time": 1, "duration_ms": 1000,
-            "status": "ok",
-            "attributes": s.attributes,
-        }]
+        spans = [
+            {
+                "name": "anthropic.messages",
+                "trace_id": "t1",
+                "span_id": "s1",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
+                "status": "ok",
+                "attributes": s.attributes,
+            }
+        ]
         rows = dash._rows(spans)
         assert len(rows) == 1
         row = rows[0]
@@ -61,16 +67,22 @@ class TestFix1AnthropicSystemPrompt:
         """For traces written before the patch fix, attributes.system exists
         but messages has no role=system entry — the row must still carry it
         so the dashboard's parseInput fallback can find it."""
-        spans = [{
-            "name": "anthropic.messages",
-            "trace_id": "t2", "span_id": "s2", "parent_id": None,
-            "start_time": 0, "end_time": 1, "duration_ms": 1000,
-            "status": "ok",
-            "attributes": {
-                "input": json.dumps([{"role": "user", "content": "hi"}]),
-                "system": "You are a helpful assistant grounded in the docs.",
-            },
-        }]
+        spans = [
+            {
+                "name": "anthropic.messages",
+                "trace_id": "t2",
+                "span_id": "s2",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
+                "status": "ok",
+                "attributes": {
+                    "input": json.dumps([{"role": "user", "content": "hi"}]),
+                    "system": "You are a helpful assistant grounded in the docs.",
+                },
+            }
+        ]
         rows = dash._rows(spans)
         assert rows[0]["system"] is not None
         assert "helpful assistant" in rows[0]["system"]
@@ -80,13 +92,16 @@ class TestFix1AnthropicSystemPrompt:
 # Fix 2 — quoted_title regex no longer flags product names
 # ---------------------------------------------------------------------------
 
+
 class TestFix2QuotedTitleNoise:
     def test_capitalized_quoted_phrase_alone_is_not_a_citation(self):
         """The product name 'Junction Box' inside a tool-use payload must
         NOT be flagged as an invented citation."""
         s = Span(name="anthropic.messages", trace_id="t")
         s.attributes["input"] = "Pack the following items: junction box, screws."
-        s.attributes["output"] = "ToolUseBlock(id='abc', input={'item': 'Junction Box'})"
+        s.attributes["output"] = (
+            "ToolUseBlock(id='abc', input={'item': 'Junction Box'})"
+        )
         score = CitationAccuracy().evaluate(s)
         assert score == pytest.approx(1.0)
         # Tool-call shape → CitationAccuracy returns 1.0 without recording details.
@@ -96,7 +111,9 @@ class TestFix2QuotedTitleNoise:
         """A real citation pattern like 'see "X"' should still be detected."""
         s = Span(name="openai.chat.completions", trace_id="t")
         s.attributes["input"] = "Reference works in machine learning."
-        s.attributes["output"] = 'See "Attention Is All You Need" for the original work.'
+        s.attributes["output"] = (
+            'See "Attention Is All You Need" for the original work.'
+        )
         score = CitationAccuracy().evaluate(s)
         # The quoted title isn't in the context → invented → 0.0
         assert score < 1.0
@@ -116,15 +133,18 @@ class TestFix2QuotedTitleNoise:
 # Fix 3 — Eval scores actually reach disk
 # ---------------------------------------------------------------------------
 
+
 class TestFix3ExporterOrder:
     def test_evaluators_run_before_jsonl_writes(self, tmp_path):
         """A user calling instrument(storage='jsonl', evaluators=[...]) must
         see eval_scores in the resulting traces.jsonl."""
-        from peekr.exporters import _exporters as exporter_list, add_exporter, export_span
+        from peekr.exporters import _exporters as exporter_list, export_span
+
         # Clear current exporter state to make this test deterministic.
         exporter_list.clear()
 
         from peekr import instrument as _instrument
+
         # Force re-instrument by clearing peekr's "patched" flag is unsafe here;
         # we just call instrument with our test path and verify the registered
         # exporter ORDER.
@@ -162,6 +182,7 @@ class TestFix3ExporterOrder:
 # Fix 4 — Judge spans hidden from the dashboard
 # ---------------------------------------------------------------------------
 
+
 class TestFix4HideJudgeSpans:
     def test_internal_spans_filtered_from_dashboard_rows(self):
         """Spans marked attributes['peekr.internal'] = True must not appear
@@ -170,16 +191,22 @@ class TestFix4HideJudgeSpans:
             {
                 "name": "openai.chat.completions",
                 "trace_id": "user-call",
-                "span_id": "su", "parent_id": None,
-                "start_time": 0, "end_time": 1, "duration_ms": 1000,
+                "span_id": "su",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
                 "status": "ok",
                 "attributes": {"input": "hi", "output": "hello"},
             },
             {
                 "name": "openai.chat.completions",
                 "trace_id": "judge-call",
-                "span_id": "sj", "parent_id": None,
-                "start_time": 0, "end_time": 1, "duration_ms": 1000,
+                "span_id": "sj",
+                "parent_id": None,
+                "start_time": 0,
+                "end_time": 1,
+                "duration_ms": 1000,
                 "status": "ok",
                 "attributes": {
                     "input": "judge prompt",
@@ -191,7 +218,8 @@ class TestFix4HideJudgeSpans:
         # generate_dashboard filters via the same predicate; we exercise the
         # filter directly in case the rows function is reused elsewhere.
         kept = [
-            s for s in spans
+            s
+            for s in spans
             if any(s["name"].startswith(p) for p in dash._LLM_PREFIXES)
             and not (s.get("attributes") or {}).get("peekr.internal")
         ]
@@ -222,8 +250,10 @@ class TestFix4HideJudgeSpans:
 # Fix 5 — Per-span evaluator filtering
 # ---------------------------------------------------------------------------
 
+
 class _FakeEval:
     """Evaluator that returns a constant score so we can verify it ran."""
+
     def __init__(self, score=1.0, name_override="fake"):
         self._score = score
         self._name = name_override
@@ -286,6 +316,7 @@ class TestFix5SpanFilter:
 # Fix 6 — Hallucination skips tool-call outputs
 # ---------------------------------------------------------------------------
 
+
 class TestFix6HallucinationOnToolUse:
     def test_tool_use_output_returns_one_without_calling_judge(self):
         """`ToolUseBlock(...)` style outputs must not be sent to the judge —
@@ -303,7 +334,10 @@ class TestFix6HallucinationOnToolUse:
             # The judge should never have been called.
             mock_openai.chat.completions.create.assert_not_called()
             assert s.attributes["hallucination_details"]["total"] == 0
-            assert s.attributes["hallucination_details"]["reason"] == "tool call, not a generation"
+            assert (
+                s.attributes["hallucination_details"]["reason"]
+                == "tool call, not a generation"
+            )
 
     def test_json_payload_output_is_also_skipped(self):
         with patch("peekr.eval._judge.openai") as mock_openai:
@@ -323,7 +357,9 @@ class TestFix6HallucinationOnToolUse:
             ev = Hallucination()
             s = Span(name="openai.chat.completions", trace_id="t")
             s.attributes["input"] = "The Eiffel Tower was completed in 1889."
-            s.attributes["output"] = "The Eiffel Tower was completed in 1923 by Frank Lloyd Wright."
+            s.attributes["output"] = (
+                "The Eiffel Tower was completed in 1923 by Frank Lloyd Wright."
+            )
             score = ev.evaluate(s)
             assert score == pytest.approx(0.62)
             mock_openai.chat.completions.create.assert_called_once()

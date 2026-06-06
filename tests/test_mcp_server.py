@@ -19,15 +19,53 @@ CREATE TABLE spans (
 
 _ROWS = [
     # trace t1: a 2-span agent run; the LLM span hallucinated (0.30)
-    ("t1", "s1", None, "agent.run", 1.0, 2.0, 1000.0, "ok",
-     json.dumps({"model": "gpt-4o", "tokens_total": 100,
-                 "eval_scores": {"Hallucination": 0.30},
-                 "output": "Coverage includes unlimited visits."}), None, None),
-    ("t1", "s2", "s1", "llm.call", 1.1, 1.5, 400.0, "ok",
-     json.dumps({"model": "gpt-4o", "tokens_total": 80}), None, None),
+    (
+        "t1",
+        "s1",
+        None,
+        "agent.run",
+        1.0,
+        2.0,
+        1000.0,
+        "ok",
+        json.dumps(
+            {
+                "model": "gpt-4o",
+                "tokens_total": 100,
+                "eval_scores": {"Hallucination": 0.30},
+                "output": "Coverage includes unlimited visits.",
+            }
+        ),
+        None,
+        None,
+    ),
+    (
+        "t1",
+        "s2",
+        "s1",
+        "llm.call",
+        1.1,
+        1.5,
+        400.0,
+        "ok",
+        json.dumps({"model": "gpt-4o", "tokens_total": 80}),
+        None,
+        None,
+    ),
     # trace t2: a single errored span on a different model
-    ("t2", "s3", None, "agent.run", 3.0, 3.2, 200.0, "error",
-     json.dumps({"model": "claude-opus-4-8", "tokens_total": 50, "error": "boom"}), None, None),
+    (
+        "t2",
+        "s3",
+        None,
+        "agent.run",
+        3.0,
+        3.2,
+        200.0,
+        "error",
+        json.dumps({"model": "claude-opus-4-8", "tokens_total": 50, "error": "boom"}),
+        None,
+        None,
+    ),
 ]
 
 
@@ -78,11 +116,22 @@ def test_jsonl_reader(tmp_path):
     path = tmp_path / "traces.jsonl"
     with open(path, "w") as f:
         for r in _ROWS:
-            f.write(json.dumps({
-                "trace_id": r[0], "span_id": r[1], "parent_id": r[2], "name": r[3],
-                "start_time": r[4], "end_time": r[5], "duration_ms": r[6], "status": r[7],
-                "attributes": json.loads(r[8]),
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "trace_id": r[0],
+                        "span_id": r[1],
+                        "parent_id": r[2],
+                        "name": r[3],
+                        "start_time": r[4],
+                        "end_time": r[5],
+                        "duration_ms": r[6],
+                        "status": r[7],
+                        "attributes": json.loads(r[8]),
+                    }
+                )
+                + "\n"
+            )
     store = TraceStore(jsonl_path=str(path))
     assert len(store._rows()) == 3
     assert store.token_usage_by_model()["gpt-4o"] == 180

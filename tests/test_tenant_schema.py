@@ -4,6 +4,7 @@ These fields are first-class (not in attributes) so the hosted backend can
 route + index without JSON extraction. Resolution priority for each field:
 peekr.session(...) > instrument(...) > env var > None.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,6 +36,7 @@ def _clean_env(*keys: str):
 def _clean_defaults():
     """Reset process defaults around a test."""
     from peekr import context as ctx
+
     saved = (ctx._default_tenant_id, ctx._default_retention_class)
     ctx._default_tenant_id = None
     ctx._default_retention_class = None
@@ -47,6 +49,7 @@ def _clean_defaults():
 # ---------------------------------------------------------------------------
 # 1. Schema
 # ---------------------------------------------------------------------------
+
 
 class TestSchema:
     def test_span_has_first_class_fields(self):
@@ -67,6 +70,7 @@ class TestSchema:
 # ---------------------------------------------------------------------------
 # 2. Resolution order: session > instrument > env > None
 # ---------------------------------------------------------------------------
+
 
 class TestResolutionOrder:
     def test_no_signal_yields_none(self):
@@ -117,7 +121,7 @@ class TestResolutionOrder:
             with peekr.session(tenant_id="acme", user_id="alice"):
                 span, tok = start_span("op")
                 try:
-                    assert span.tenant_id == "acme"           # first-class
+                    assert span.tenant_id == "acme"  # first-class
                     assert span.attributes["user_id"] == "alice"  # legacy attribute
                 finally:
                     end_span(span, tok)
@@ -126,6 +130,7 @@ class TestResolutionOrder:
 # ---------------------------------------------------------------------------
 # 3. Persistence — JSONL + SQLite
 # ---------------------------------------------------------------------------
+
 
 class TestPersistence:
     def test_jsonl_emits_top_level(self, tmp_path):
@@ -143,7 +148,9 @@ class TestPersistence:
         SQLiteExporter(str(path))
         with sqlite3.connect(path) as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(spans)").fetchall()}
-            indexes = {r[1] for r in conn.execute("PRAGMA index_list(spans)").fetchall()}
+            indexes = {
+                r[1] for r in conn.execute("PRAGMA index_list(spans)").fetchall()
+            }
         assert "tenant_id" in cols
         assert "retention_class" in cols
         assert "idx_tenant_id" in indexes
@@ -213,19 +220,24 @@ class TestPersistence:
         with sqlite3.connect(path) as conn:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(spans)").fetchall()}
             version = conn.execute("PRAGMA user_version").fetchone()[0]
-            row = conn.execute("SELECT span_id, tenant_id FROM spans WHERE span_id = 's1'").fetchone()
+            row = conn.execute(
+                "SELECT span_id, tenant_id FROM spans WHERE span_id = 's1'"
+            ).fetchone()
 
         assert "tenant_id" in cols and "retention_class" in cols
         assert version == SQLiteExporter.SCHEMA_VERSION
-        assert row[0] == "s1"        # legacy row preserved
-        assert row[1] is None        # back-filled as NULL
+        assert row[0] == "s1"  # legacy row preserved
+        assert row[1] is None  # back-filled as NULL
 
         # And new writes work
-        s = Span(name="new.span", trace_id="t2", tenant_id="acme", retention_class="long")
+        s = Span(
+            name="new.span", trace_id="t2", tenant_id="acme", retention_class="long"
+        )
         s.finish()
         exp.export(s)
         with sqlite3.connect(path) as conn:
             r = conn.execute(
-                "SELECT tenant_id, retention_class FROM spans WHERE span_id = ?", (s.span_id,)
+                "SELECT tenant_id, retention_class FROM spans WHERE span_id = ?",
+                (s.span_id,),
             ).fetchone()
         assert r == ("acme", "long")

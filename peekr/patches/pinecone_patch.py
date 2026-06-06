@@ -27,7 +27,11 @@ def _make_query_patch(original):
             latency_ms = (time.time() - t0) * 1000
             span.attributes["latency_ms"] = round(latency_ms, 2)
             try:
-                matches = response.matches if hasattr(response, "matches") else response.get("matches", [])
+                matches = (
+                    response.matches
+                    if hasattr(response, "matches")
+                    else response.get("matches", [])
+                )
                 span.attributes["num_results"] = len(matches) if matches else 0
             except Exception:
                 span.attributes["num_results"] = 0
@@ -40,6 +44,7 @@ def _make_query_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -55,7 +60,11 @@ def _make_async_query_patch(original):
             latency_ms = (time.time() - t0) * 1000
             span.attributes["latency_ms"] = round(latency_ms, 2)
             try:
-                matches = response.matches if hasattr(response, "matches") else response.get("matches", [])
+                matches = (
+                    response.matches
+                    if hasattr(response, "matches")
+                    else response.get("matches", [])
+                )
                 span.attributes["num_results"] = len(matches) if matches else 0
             except Exception:
                 span.attributes["num_results"] = 0
@@ -68,6 +77,7 @@ def _make_async_query_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -88,6 +98,7 @@ def _make_upsert_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -108,6 +119,7 @@ def _make_async_upsert_patch(original):
         finally:
             end_span(span, token)
             export_span(span)
+
     return patched
 
 
@@ -139,6 +151,7 @@ def patch_pinecone():
     # ── v3 API: pinecone.Pinecone().Index (GRPCIndex / Index from pinecone.data) ──
     try:
         from pinecone.data import Index as DataIndex
+
         if not getattr(DataIndex.query, "_peekr_patched", False):
             orig = DataIndex.query
             DataIndex.query = _make_query_patch(orig)
@@ -148,6 +161,7 @@ def patch_pinecone():
 
     try:
         from pinecone.data import Index as DataIndex
+
         if not getattr(DataIndex.upsert, "_peekr_patched", False):
             orig = DataIndex.upsert
             DataIndex.upsert = _make_upsert_patch(orig)
@@ -158,6 +172,7 @@ def patch_pinecone():
     # ── async variant (pinecone.data.index.Index async methods if present) ────
     try:
         from pinecone.data import Index as DataIndex
+
         query_async = getattr(DataIndex, "query_async", None)
         if query_async and not getattr(query_async, "_peekr_patched", False):
             DataIndex.query_async = _make_async_query_patch(query_async)
@@ -167,6 +182,7 @@ def patch_pinecone():
 
     try:
         from pinecone.data import Index as DataIndex
+
         upsert_async = getattr(DataIndex, "upsert_async", None)
         if upsert_async and not getattr(upsert_async, "_peekr_patched", False):
             DataIndex.upsert_async = _make_async_upsert_patch(upsert_async)

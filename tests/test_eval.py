@@ -15,7 +15,10 @@ from peekr.eval.hallucination import Hallucination, _parse_score, _parse_claims
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_llm_span(name="openai.chat.completions", status="ok", output="hello", input_text="hi"):
+
+def make_llm_span(
+    name="openai.chat.completions", status="ok", output="hello", input_text="hi"
+):
     s = Span(name=name, trace_id="trace-1")
     s.attributes["input"] = input_text
     s.attributes["output"] = output
@@ -33,6 +36,7 @@ def make_non_llm_span():
 # ---------------------------------------------------------------------------
 # NotEmpty
 # ---------------------------------------------------------------------------
+
 
 class TestNotEmpty:
     def test_non_empty_string_returns_one(self):
@@ -65,6 +69,7 @@ class TestNotEmpty:
 # NoError
 # ---------------------------------------------------------------------------
 
+
 class TestNoError:
     def test_ok_status_returns_one(self):
         span = make_llm_span(status="ok")
@@ -85,6 +90,7 @@ class TestNoError:
 # ---------------------------------------------------------------------------
 # EvalExporter
 # ---------------------------------------------------------------------------
+
 
 class _ConstantEvaluator(BaseEvaluator):
     """Evaluator that always returns a fixed score — no LLM calls."""
@@ -147,6 +153,7 @@ class TestEvalExporter:
         "judge graded 0.0 = fully hallucinated" on the dashboard. The
         exporter now records the exception in `eval_errors` and omits the
         score entirely so consumers know it's missing, not zero."""
+
         class BrokenEvaluator(BaseEvaluator):
             @property
             def name(self):
@@ -166,6 +173,7 @@ class TestEvalExporter:
 # ---------------------------------------------------------------------------
 # _in_eval guard against recursion
 # ---------------------------------------------------------------------------
+
 
 class TestInEvalGuard:
     def test_evaluator_not_called_when_in_eval(self):
@@ -222,6 +230,7 @@ class TestInEvalGuard:
 # ---------------------------------------------------------------------------
 # Rubric (mocked — no real API calls)
 # ---------------------------------------------------------------------------
+
 
 class TestRubricMocked:
     def test_rubric_calls_openai_and_returns_float(self):
@@ -283,7 +292,11 @@ class TestRubricMocked:
         more specific JudgeUnavailable so callers (EvalExporter) can record
         it as a judge problem rather than a programming error."""
         from peekr.eval._judge import JudgeUnavailable
-        with patch("peekr.eval._judge.openai", None), patch("peekr.eval._judge.anthropic", None):
+
+        with (
+            patch("peekr.eval._judge.openai", None),
+            patch("peekr.eval._judge.anthropic", None),
+        ):
             rubric = Rubric("Be concise")
             span = make_llm_span()
             with pytest.raises(JudgeUnavailable):
@@ -293,6 +306,7 @@ class TestRubricMocked:
 # ---------------------------------------------------------------------------
 # Hallucination (mocked — no real API calls)
 # ---------------------------------------------------------------------------
+
 
 class TestParseScore:
     def test_parses_plain_float(self):
@@ -376,7 +390,9 @@ class TestHallucination:
             span = make_llm_span(input_text="ignored", output="Berlin is in Germany.")
             evaluator.evaluate(span)
 
-        prompt_text = mock_openai.chat.completions.create.call_args.kwargs["messages"][0]["content"]
+        prompt_text = mock_openai.chat.completions.create.call_args.kwargs["messages"][
+            0
+        ]["content"]
         assert retrieved_doc in prompt_text
         assert "ignored" not in prompt_text
 
@@ -412,8 +428,11 @@ class TestHallucination:
         more specific JudgeUnavailable so EvalExporter records this as a
         judge problem (eval_errors) rather than as a 0.0 score."""
         from peekr.eval._judge import JudgeUnavailable
-        with patch("peekr.eval._judge.openai", None), \
-             patch("peekr.eval._judge.anthropic", None):
+
+        with (
+            patch("peekr.eval._judge.openai", None),
+            patch("peekr.eval._judge.anthropic", None),
+        ):
             evaluator = Hallucination()
             span = make_llm_span(input_text="ctx", output="out")
             with pytest.raises(JudgeUnavailable):
@@ -430,7 +449,9 @@ class TestHallucination:
         with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
             exporter = EvalExporter(async_eval=False, evaluators=[Hallucination()])
-            span = make_llm_span(input_text="The sky is blue.", output="The sky is green.")
+            span = make_llm_span(
+                input_text="The sky is blue.", output="The sky is green."
+            )
             exporter.export(span)
 
         assert span.attributes["eval_scores"]["Hallucination"] == pytest.approx(0.3)
@@ -439,6 +460,7 @@ class TestHallucination:
 # ---------------------------------------------------------------------------
 # Hallucination — detailed (RAGAS-style claim decomposition)
 # ---------------------------------------------------------------------------
+
 
 class TestParseClaims:
     def test_parses_valid_json(self):
@@ -475,12 +497,14 @@ class TestHallucinationDetailed:
 
     def test_score_is_supported_over_total(self):
         with patch("peekr.eval._judge.openai") as mock_openai:
-            mock_openai.chat.completions.create.return_value = self._judge_response([
-                {"text": "Claim 1", "verdict": "supported"},
-                {"text": "Claim 2", "verdict": "supported"},
-                {"text": "Claim 3", "verdict": "contradicted"},
-                {"text": "Claim 4", "verdict": "unsupported"},
-            ])
+            mock_openai.chat.completions.create.return_value = self._judge_response(
+                [
+                    {"text": "Claim 1", "verdict": "supported"},
+                    {"text": "Claim 2", "verdict": "supported"},
+                    {"text": "Claim 3", "verdict": "contradicted"},
+                    {"text": "Claim 4", "verdict": "unsupported"},
+                ]
+            )
             evaluator = Hallucination(detailed=True)
             span = make_llm_span(input_text="ctx", output="out")
             score = evaluator.evaluate(span)
@@ -488,10 +512,12 @@ class TestHallucinationDetailed:
 
     def test_writes_details_to_span(self):
         with patch("peekr.eval._judge.openai") as mock_openai:
-            mock_openai.chat.completions.create.return_value = self._judge_response([
-                {"text": "A", "verdict": "supported"},
-                {"text": "B", "verdict": "contradicted"},
-            ])
+            mock_openai.chat.completions.create.return_value = self._judge_response(
+                [
+                    {"text": "A", "verdict": "supported"},
+                    {"text": "B", "verdict": "contradicted"},
+                ]
+            )
             evaluator = Hallucination(detailed=True)
             span = make_llm_span(input_text="ctx", output="out")
             evaluator.evaluate(span)
@@ -516,11 +542,15 @@ class TestHallucinationDetailed:
 
     def test_integration_via_eval_exporter_writes_both(self):
         with patch("peekr.eval._judge.openai") as mock_openai:
-            mock_openai.chat.completions.create.return_value = self._judge_response([
-                {"text": "A", "verdict": "supported"},
-                {"text": "B", "verdict": "unsupported"},
-            ])
-            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(detailed=True)])
+            mock_openai.chat.completions.create.return_value = self._judge_response(
+                [
+                    {"text": "A", "verdict": "supported"},
+                    {"text": "B", "verdict": "unsupported"},
+                ]
+            )
+            exporter = EvalExporter(
+                async_eval=False, evaluators=[Hallucination(detailed=True)]
+            )
             span = make_llm_span(input_text="ctx", output="out")
             exporter.export(span)
 
@@ -531,6 +561,7 @@ class TestHallucinationDetailed:
 # ---------------------------------------------------------------------------
 # Async eval path — background scoring + flush + re-export to storage
 # ---------------------------------------------------------------------------
+
 
 class TestAsyncEval:
     def test_async_scores_reach_storage_after_flush(self):
@@ -551,7 +582,9 @@ class TestAsyncEval:
         saved = list(_exporters)
         _exporters[:] = [Collector()]
         try:
-            exporter = EvalExporter(evaluators=[_ConstantEvaluator(score=0.7, name_override="bg")])
+            exporter = EvalExporter(
+                evaluators=[_ConstantEvaluator(score=0.7, name_override="bg")]
+            )
             span = make_llm_span()
             exporter.export(span)
             exporter.flush(timeout=10)

@@ -91,6 +91,7 @@ class EvalExporter:
             # (which runs before EvalExporter in the pipeline). The background
             # job scores the span and sends a PATCH to update it in Peekr Cloud.
             import copy
+
             span_copy = copy.copy(span)
             span_copy.attributes = dict(span.attributes or {})
             fut = self._pool.submit(self._run_eval_and_patch, span_copy)
@@ -164,6 +165,7 @@ class EvalExporter:
             # background eval die with ImportError inside its Future, silently
             # dropping the scores it had just computed.
             from ..exporters import _exporters
+
             for exporter in list(_exporters):
                 if isinstance(exporter, EvalExporter):
                     continue

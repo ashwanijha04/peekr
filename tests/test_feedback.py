@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
-import tempfile
 
 import pytest
 
@@ -70,11 +68,17 @@ def db_with_spans(db):
 # feedback() tests
 # ---------------------------------------------------------------------------
 
+
 class TestFeedbackInsert:
     def test_creates_feedback_table(self, db):
         feedback(trace_id="abc", rating="good", db_path=db)
         conn = sqlite3.connect(db)
-        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
         conn.close()
         assert "feedback" in tables
 
@@ -84,7 +88,7 @@ class TestFeedbackInsert:
         rows = conn.execute("SELECT * FROM feedback WHERE trace_id='abc'").fetchall()
         conn.close()
         assert len(rows) == 1
-        assert rows[0][2] == "good"   # rating column
+        assert rows[0][2] == "good"  # rating column
         assert rows[0][3] == "great"  # note column
 
     def test_multiple_feedbacks(self, db):
@@ -116,6 +120,7 @@ class TestFeedbackInsert:
 # export_feedback() tests
 # ---------------------------------------------------------------------------
 
+
 class TestExportFeedback:
     def test_export_all_raw(self, db_with_spans, tmp_path):
         feedback(trace_id="trace-good-1", rating="good", db_path=db_with_spans)
@@ -123,9 +128,9 @@ class TestExportFeedback:
         out = str(tmp_path / "out.jsonl")
         export_feedback(db_path=db_with_spans, filter=None, output=out, format="raw")
         with open(out) as f:
-            lines = [json.loads(l) for l in f if l.strip()]
+            lines = [json.loads(line) for line in f if line.strip()]
         assert len(lines) == 2
-        ratings = {l["rating"] for l in lines}
+        ratings = {line["rating"] for line in lines}
         assert ratings == {"good", "bad"}
 
     def test_export_filter_good(self, db_with_spans, tmp_path):
@@ -134,7 +139,7 @@ class TestExportFeedback:
         out = str(tmp_path / "out.jsonl")
         export_feedback(db_path=db_with_spans, filter="good", output=out, format="raw")
         with open(out) as f:
-            lines = [json.loads(l) for l in f if l.strip()]
+            lines = [json.loads(line) for line in f if line.strip()]
         assert len(lines) == 1
         assert lines[0]["rating"] == "good"
 
@@ -144,16 +149,18 @@ class TestExportFeedback:
         out = str(tmp_path / "out.jsonl")
         export_feedback(db_path=db_with_spans, filter="bad", output=out, format="raw")
         with open(out) as f:
-            lines = [json.loads(l) for l in f if l.strip()]
+            lines = [json.loads(line) for line in f if line.strip()]
         assert len(lines) == 1
         assert lines[0]["rating"] == "bad"
 
     def test_export_openai_ft_format(self, db_with_spans, tmp_path):
         feedback(trace_id="trace-good-1", rating="good", db_path=db_with_spans)
         out = str(tmp_path / "out.jsonl")
-        export_feedback(db_path=db_with_spans, filter="good", output=out, format="openai-ft")
+        export_feedback(
+            db_path=db_with_spans, filter="good", output=out, format="openai-ft"
+        )
         with open(out) as f:
-            lines = [json.loads(l) for l in f if l.strip()]
+            lines = [json.loads(line) for line in f if line.strip()]
         assert len(lines) == 1
         record = lines[0]
         assert "messages" in record
@@ -164,7 +171,9 @@ class TestExportFeedback:
     def test_openai_ft_extracts_span_attributes(self, db_with_spans, tmp_path):
         feedback(trace_id="trace-good-1", rating="good", db_path=db_with_spans)
         out = str(tmp_path / "out.jsonl")
-        export_feedback(db_path=db_with_spans, filter="good", output=out, format="openai-ft")
+        export_feedback(
+            db_path=db_with_spans, filter="good", output=out, format="openai-ft"
+        )
         with open(out) as f:
             record = json.loads(f.readline())
         # The span for trace-good-1 has input="What is 2+2?" and output="4"
@@ -195,6 +204,6 @@ class TestExportFeedback:
         out = str(tmp_path / "out.jsonl")
         export_feedback(db_path=db, filter=None, output=out, format="raw")
         with open(out) as f:
-            lines = [json.loads(l) for l in f if l.strip()]
+            lines = [json.loads(line) for line in f if line.strip()]
         assert len(lines) == 1
         assert lines[0]["trace_id"] == "t1"

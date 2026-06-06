@@ -38,8 +38,17 @@ DEFAULT_DB = "traces.db"
 DEFAULT_JSONL = "traces.jsonl"
 
 _SPAN_COLS = (
-    "trace_id", "span_id", "parent_id", "name", "start_time", "end_time",
-    "duration_ms", "status", "attributes", "tenant_id", "retention_class",
+    "trace_id",
+    "span_id",
+    "parent_id",
+    "name",
+    "start_time",
+    "end_time",
+    "duration_ms",
+    "status",
+    "attributes",
+    "tenant_id",
+    "retention_class",
 )
 
 
@@ -124,17 +133,25 @@ class TraceStore:
             spans.sort(key=lambda s: s.get("start_time") or 0)
             root = next((s for s in spans if not s.get("parent_id")), spans[0])
             tokens = sum((s["attributes"].get("tokens_total") or 0) for s in spans)
-            models = sorted({s["attributes"].get("model") for s in spans if s["attributes"].get("model")})
-            out.append({
-                "trace_id": trace_id,
-                "name": root.get("name"),
-                "spans": len(spans),
-                "tokens_total": tokens,
-                "models": models,
-                "has_error": any(s.get("status") == "error" for s in spans),
-                "start_time": root.get("start_time"),
-                "duration_ms": root.get("duration_ms"),
-            })
+            models = sorted(
+                {
+                    s["attributes"].get("model")
+                    for s in spans
+                    if s["attributes"].get("model")
+                }
+            )
+            out.append(
+                {
+                    "trace_id": trace_id,
+                    "name": root.get("name"),
+                    "spans": len(spans),
+                    "tokens_total": tokens,
+                    "models": models,
+                    "has_error": any(s.get("status") == "error" for s in spans),
+                    "start_time": root.get("start_time"),
+                    "duration_ms": root.get("duration_ms"),
+                }
+            )
         out.sort(key=lambda t: t.get("start_time") or 0, reverse=True)
         return out[:limit]
 
@@ -145,34 +162,40 @@ class TraceStore:
         result = []
         for s in spans:
             a = s["attributes"]
-            result.append({
-                "span_id": s.get("span_id"),
-                "parent_id": s.get("parent_id"),
-                "name": s.get("name"),
-                "status": s.get("status"),
-                "duration_ms": s.get("duration_ms"),
-                "model": a.get("model"),
-                "tokens_total": a.get("tokens_total"),
-                "hallucination": self._hallucination(a),
-                "input": _truncate(a.get("input")),
-                "output": _truncate(a.get("output")),
-                "error": a.get("error"),
-            })
+            result.append(
+                {
+                    "span_id": s.get("span_id"),
+                    "parent_id": s.get("parent_id"),
+                    "name": s.get("name"),
+                    "status": s.get("status"),
+                    "duration_ms": s.get("duration_ms"),
+                    "model": a.get("model"),
+                    "tokens_total": a.get("tokens_total"),
+                    "hallucination": self._hallucination(a),
+                    "input": _truncate(a.get("input")),
+                    "output": _truncate(a.get("output")),
+                    "error": a.get("error"),
+                }
+            )
         return result
 
-    def worst_hallucinations(self, limit: int = 10, max_score: float = 0.5) -> list[dict]:
+    def worst_hallucinations(
+        self, limit: int = 10, max_score: float = 0.5
+    ) -> list[dict]:
         """Spans whose claim-level hallucination score is below ``max_score`` (lower = worse), worst first."""
         out = []
         for s in self._rows():
             score = self._hallucination(s["attributes"])
             if score is not None and score < max_score:
-                out.append({
-                    "trace_id": s["trace_id"],
-                    "span_id": s.get("span_id"),
-                    "name": s.get("name"),
-                    "hallucination": score,
-                    "output": _truncate(s["attributes"].get("output")),
-                })
+                out.append(
+                    {
+                        "trace_id": s["trace_id"],
+                        "span_id": s.get("span_id"),
+                        "name": s.get("name"),
+                        "hallucination": score,
+                        "output": _truncate(s["attributes"].get("output")),
+                    }
+                )
         out.sort(key=lambda x: x["hallucination"])
         return out[:limit]
 
@@ -190,31 +213,44 @@ class TraceStore:
         """Spans that errored, most recent first."""
         out = [s for s in self._rows() if s.get("status") == "error"]
         out.sort(key=lambda s: s.get("start_time") or 0, reverse=True)
-        return [{
-            "trace_id": s["trace_id"],
-            "span_id": s.get("span_id"),
-            "name": s.get("name"),
-            "error": s["attributes"].get("error"),
-            "model": s["attributes"].get("model"),
-        } for s in out[:limit]]
-
-    def search_spans(self, name_contains: str | None = None, model: str | None = None, limit: int = 25) -> list[dict]:
-        """Find spans by substring of the span name and/or exact model."""
-        out = []
-        for s in self._rows():
-            if name_contains and name_contains.lower() not in (s.get("name") or "").lower():
-                continue
-            if model and s["attributes"].get("model") != model:
-                continue
-            out.append({
+        return [
+            {
                 "trace_id": s["trace_id"],
                 "span_id": s.get("span_id"),
                 "name": s.get("name"),
-                "status": s.get("status"),
-                "duration_ms": s.get("duration_ms"),
+                "error": s["attributes"].get("error"),
                 "model": s["attributes"].get("model"),
-                "tokens_total": s["attributes"].get("tokens_total"),
-            })
+            }
+            for s in out[:limit]
+        ]
+
+    def search_spans(
+        self,
+        name_contains: str | None = None,
+        model: str | None = None,
+        limit: int = 25,
+    ) -> list[dict]:
+        """Find spans by substring of the span name and/or exact model."""
+        out = []
+        for s in self._rows():
+            if (
+                name_contains
+                and name_contains.lower() not in (s.get("name") or "").lower()
+            ):
+                continue
+            if model and s["attributes"].get("model") != model:
+                continue
+            out.append(
+                {
+                    "trace_id": s["trace_id"],
+                    "span_id": s.get("span_id"),
+                    "name": s.get("name"),
+                    "status": s.get("status"),
+                    "duration_ms": s.get("duration_ms"),
+                    "model": s["attributes"].get("model"),
+                    "tokens_total": s["attributes"].get("tokens_total"),
+                }
+            )
             if len(out) >= limit:
                 break
         return out
@@ -252,7 +288,9 @@ def build_server(store: TraceStore):
         return store.error_spans(limit)
 
     @server.tool()
-    def search_spans(name_contains: str = "", model: str = "", limit: int = 25) -> list[dict]:
+    def search_spans(
+        name_contains: str = "", model: str = "", limit: int = 25
+    ) -> list[dict]:
         """Search spans by a substring of the span name and/or an exact model name."""
         return store.search_spans(name_contains or None, model or None, limit)
 

@@ -1,10 +1,18 @@
 from __future__ import annotations
 from .exporters import (
-    add_exporter, clear_exporters, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
+    add_exporter,
+    clear_exporters,
+    JSONLExporter,
+    ConsoleExporter,
+    SQLiteExporter,
+    HTTPExporter,
 )
 from .otel import OTelExporter
 from .context import (
-    start_span, end_span, get_current_span, set_process_defaults,
+    start_span,
+    end_span,
+    get_current_span,
+    set_process_defaults,
 )
 from .decorators import trace
 from .session import session
@@ -13,7 +21,7 @@ from .experiment import experiment
 from .alerts import alert
 from . import eval as eval  # noqa: A001 — subpackage, not the builtin
 from . import guard
-from . import prompts
+from . import prompts as prompts  # noqa: PLC0414 — public re-export
 from .middleware import FastAPIMiddleware, PeekrASGIMiddleware  # noqa: F401
 from .harnesses.rag import instrument_rag
 from .evidence import record_evidence, clear_evidence, evidence  # noqa: F401
@@ -40,7 +48,7 @@ _COMPLIANCE_DISABLED = object()
 def instrument(
     exporter=None,
     console: bool = True,
-    storage: str = "jsonl",       # "jsonl" | "sqlite" | "both"
+    storage: str = "jsonl",  # "jsonl" | "sqlite" | "both"
     jsonl_path: str = "traces.jsonl",
     db_path: str = "traces.db",
     alerts: list = None,
@@ -130,6 +138,7 @@ def instrument(
     if guardrails:
         from .guard import _MutatingGuardrailExporter
         from .context import register_input_guard
+
         add_exporter(_MutatingGuardrailExporter(guardrails))
         for g in guardrails:
             if getattr(g, "_input_guard", False):
@@ -138,16 +147,19 @@ def instrument(
     # 3) Evaluators — scores written to span.attributes["eval_scores"].
     if evaluators:
         from .eval import EvalExporter
-        add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter, async_eval=async_eval))
+
+        add_exporter(
+            EvalExporter(evaluators, span_filter=evaluate_filter, async_eval=async_eval)
+        )
 
     # 4) Alerts.
     if alerts:
         from .alerts import AlertExporter
+
         add_exporter(AlertExporter(alerts))
 
     # 4c) Budget alert — warn at 80% of limit, raise BudgetExceededError at limit.
     if budget_alert:
-        from .budget import BudgetAlert
         add_exporter(budget_alert)
 
     # 4b) Cloud compliance guardrails — fetched from Peekr Cloud, enforced locally.
@@ -167,7 +179,8 @@ def instrument(
     )
     if _should_add_compliance:
         from .guard._cloud_compliance import CloudComplianceGuard
-        _api_key  = getattr(exporter, "api_key",  None)
+
+        _api_key = getattr(exporter, "api_key", None)
         _endpoint = getattr(exporter, "endpoint", "https://peekr.starkspherelabs.com")
         # compliance=None → auto (packs=None means "all enabled in dashboard")
         # compliance=[...] → explicit list passed through
@@ -194,6 +207,7 @@ def instrument(
     # 6) Blocking guardrails LAST — raise after storage so violations persist.
     if guardrails:
         from .guard import _BlockingGuardrailExporter
+
         add_exporter(_BlockingGuardrailExporter(guardrails))
 
     if not _patched:
@@ -213,14 +227,23 @@ def instrument(
 
 __all__ = [
     # core
-    "instrument", "trace", "session",
-    "start_span", "end_span", "get_current_span",
+    "instrument",
+    "trace",
+    "session",
+    "start_span",
+    "end_span",
+    "get_current_span",
     # exporters
-    "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter",
-    "add_exporter", "clear_exporters",
+    "JSONLExporter",
+    "ConsoleExporter",
+    "SQLiteExporter",
+    "HTTPExporter",
+    "add_exporter",
+    "clear_exporters",
     "OTelExporter",
     # features
-    "feedback", "export_feedback",
+    "feedback",
+    "export_feedback",
     "experiment",
     "alert",
     "eval",
@@ -232,7 +255,11 @@ __all__ = [
     # harnesses
     "instrument_rag",
     # evidence ("why did the AI say that?")
-    "record_evidence", "clear_evidence", "evidence",
+    "record_evidence",
+    "clear_evidence",
+    "evidence",
     # budget
-    "BudgetAlert", "BudgetExceededError", "budget_alert",
+    "BudgetAlert",
+    "BudgetExceededError",
+    "budget_alert",
 ]

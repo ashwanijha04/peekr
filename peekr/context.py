@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 # Defined here (not in guard/) so patches can import it without any risk of
 # circular imports: patches → context is already the established direction.
 
+
 class GuardrailError(Exception):
     """Raised by a guardrail to abort an LLM call or block its response.
 
@@ -71,19 +72,24 @@ def _run_input_guards(span: "Span") -> None:
         span.status = "blocked"
         raise first_error
 
+
 _current_span: ContextVar[Optional[Span]] = ContextVar("current_span", default=None)
-_current_trace_id: ContextVar[Optional[str]] = ContextVar("current_trace_id", default=None)
+_current_trace_id: ContextVar[Optional[str]] = ContextVar(
+    "current_trace_id", default=None
+)
 
 # Sampling decision propagates from the root span through children via
 # ContextVar (it follows the async task tree). A value of None means
 # "not yet decided" — the next root span will decide.
-_trace_sample_keep: ContextVar[Optional[bool]] = ContextVar("trace_sample_keep", default=None)
+_trace_sample_keep: ContextVar[Optional[bool]] = ContextVar(
+    "trace_sample_keep", default=None
+)
 
 # Process-wide defaults set by instrument(). Lower priority than session() context.
 _default_tenant_id: Optional[str] = None
 _default_retention_class: Optional[str] = None
-_sample_rate: float = 1.0       # fraction of root traces to keep
-_keep_errors: bool = True       # always persist errored spans, even when trace dropped
+_sample_rate: float = 1.0  # fraction of root traces to keep
+_keep_errors: bool = True  # always persist errored spans, even when trace dropped
 
 
 def set_process_defaults(
@@ -133,15 +139,13 @@ def get_or_create_trace_id() -> str:
 def _resolve_tenant_id() -> Optional[str]:
     """Resolution order: session() > instrument default > env > None."""
     from .session import get_tenant_id
-    return (
-        get_tenant_id()
-        or _default_tenant_id
-        or os.environ.get("PEEKR_TENANT_ID")
-    )
+
+    return get_tenant_id() or _default_tenant_id or os.environ.get("PEEKR_TENANT_ID")
 
 
 def _resolve_retention_class() -> Optional[str]:
     from .session import get_retention_class
+
     return (
         get_retention_class()
         or _default_retention_class
@@ -166,6 +170,7 @@ def start_span(name: str) -> tuple[Span, object]:
     # Attach session metadata if a session is active
     try:
         from .session import get_session_id, get_user_id
+
         sid = get_session_id()
         uid = get_user_id()
         if sid:

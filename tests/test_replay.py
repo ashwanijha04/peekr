@@ -1,12 +1,10 @@
 from __future__ import annotations
 import json
-import os
 import sqlite3
 import sys
-import tempfile
 import types
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -20,6 +18,7 @@ import pytest
 # force-installs the stubs per test via monkeypatch, which also restores the
 # real modules afterwards so other test files are unaffected.
 # ---------------------------------------------------------------------------
+
 
 def _make_openai_stub():
     mod = types.ModuleType("openai")
@@ -55,13 +54,14 @@ def _stub_llm_sdks(monkeypatch):
     monkeypatch.setitem(sys.modules, "boto3", _boto3_stub)
 
 
-from peekr.exporters import _exporters
-from peekr.replay import load_trace, replay_trace
+from peekr.exporters import _exporters  # noqa: E402
+from peekr.replay import load_trace, replay_trace  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_span_dict(
     name: str,
@@ -95,9 +95,14 @@ def _write_sqlite(path: str, spans: list[dict]) -> None:
         conn.execute(
             "INSERT INTO spans VALUES (?,?,?,?,?,?,?,?,?)",
             (
-                s["trace_id"], s["span_id"], s.get("parent_id"),
-                s["name"], s["start_time"], s["end_time"],
-                s["duration_ms"], s["status"],
+                s["trace_id"],
+                s["span_id"],
+                s.get("parent_id"),
+                s["name"],
+                s["start_time"],
+                s["end_time"],
+                s["duration_ms"],
+                s["status"],
                 json.dumps(s.get("attributes", {})),
             ),
         )
@@ -117,6 +122,7 @@ def _write_jsonl(path: str, spans: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 # load_trace tests
 # ---------------------------------------------------------------------------
+
 
 class TestLoadTrace:
     def test_load_from_sqlite(self, tmp_path):
@@ -178,7 +184,11 @@ class TestLoadTrace:
 
     def test_load_attributes_are_dict(self, tmp_path):
         tid = uuid.uuid4().hex
-        spans = [_make_span_dict("openai.chat.completions", tid, attributes={"model": "gpt-4o"})]
+        spans = [
+            _make_span_dict(
+                "openai.chat.completions", tid, attributes={"model": "gpt-4o"}
+            )
+        ]
         db = str(tmp_path / "traces.db")
         _write_sqlite(db, spans)
 
@@ -191,6 +201,7 @@ class TestLoadTrace:
 # replay_trace tests (mocked LLM calls)
 # ---------------------------------------------------------------------------
 
+
 class TestReplayTrace:
     """All LLM SDK calls are mocked — no real API calls are made."""
 
@@ -201,7 +212,8 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": "hi"}]
         spans = [
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o", "input": json.dumps(messages)},
             )
         ]
@@ -226,7 +238,8 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": "hello"}]
         spans = [
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o-mini", "input": json.dumps(messages)},
             )
         ]
@@ -249,7 +262,8 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": "ping"}]
         spans = [
             _make_span_dict(
-                "anthropic.messages", tid,
+                "anthropic.messages",
+                tid,
                 attributes={
                     "model": "claude-3-5-haiku-20241022",
                     "input": json.dumps(messages),
@@ -279,7 +293,8 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": [{"text": "hi"}]}]
         spans = [
             _make_span_dict(
-                "bedrock.converse", tid,
+                "bedrock.converse",
+                tid,
                 attributes={
                     "model": "amazon.titan-text-lite-v1",
                     "input": json.dumps(messages),
@@ -310,11 +325,13 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": "q"}]
         spans = [
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o", "input": json.dumps(messages)},
             ),
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o", "input": json.dumps(messages)},
             ),
         ]
@@ -325,7 +342,7 @@ class TestReplayTrace:
         _exporters.clear()
         _openai_stub.chat.completions.create = mock_create
 
-        new_tid = replay_trace(tid, db_path=db)
+        replay_trace(tid, db_path=db)
 
         assert mock_create.call_count == 2
 
@@ -337,7 +354,8 @@ class TestReplayTrace:
         messages = [{"role": "user", "content": "q"}]
         spans = [
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o", "input": json.dumps(messages)},
             ),
         ]
@@ -377,7 +395,8 @@ class TestReplayTrace:
         tid = uuid.uuid4().hex
         spans = [
             _make_span_dict(
-                "openai.chat.completions", tid,
+                "openai.chat.completions",
+                tid,
                 attributes={"model": "gpt-4o"},  # no 'input' key
             )
         ]

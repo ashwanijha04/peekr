@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 A/B experiment decorator for peekr.
 
@@ -27,13 +28,13 @@ Usage — dict form (key injected as ``variant``, value as ``variant_config``):
     def run_agent(query: str, variant: str, variant_config: dict):
         return call_llm(variant_config["model"], query)
 """
-import asyncio
-import functools
-import random
-from typing import Callable
+import asyncio  # noqa: E402
+import functools  # noqa: E402
+import random  # noqa: E402
+from typing import Callable  # noqa: E402
 
-from .context import get_current_span, start_span, end_span
-from .exporters import export_span
+from .context import get_current_span, start_span, end_span  # noqa: E402
+from .exporters import export_span  # noqa: E402
 
 
 def _pick_variant(variants, split):
@@ -73,6 +74,7 @@ def experiment(_func=None, *, variants, split=None):
 
     def decorator(func: Callable) -> Callable:
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 span, token = start_span(f"experiment.{func.__name__}")
@@ -92,8 +94,10 @@ def experiment(_func=None, *, variants, split=None):
                 finally:
                     end_span(span, token)
                     export_span(span)
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 span, token = start_span(f"experiment.{func.__name__}")
@@ -113,6 +117,7 @@ def experiment(_func=None, *, variants, split=None):
                 finally:
                     end_span(span, token)
                     export_span(span)
+
             return sync_wrapper
 
     if _func is not None:

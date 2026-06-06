@@ -69,11 +69,19 @@ class SQLiteExporter:
                 )
             """)
             self._migrate(conn)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_trace_id       ON spans(trace_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trace_id       ON spans(trace_id)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_name           ON spans(name)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_start_time     ON spans(start_time)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_tenant_id      ON spans(tenant_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_retention      ON spans(retention_class)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_start_time     ON spans(start_time)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tenant_id      ON spans(tenant_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_retention      ON spans(retention_class)"
+            )
             conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
@@ -81,7 +89,9 @@ class SQLiteExporter:
         current = conn.execute("PRAGMA user_version").fetchone()[0]
         if current >= self.SCHEMA_VERSION:
             return
-        existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(spans)").fetchall()}
+        existing_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(spans)").fetchall()
+        }
         if "tenant_id" not in existing_cols:
             conn.execute("ALTER TABLE spans ADD COLUMN tenant_id TEXT")
         if "retention_class" not in existing_cols:
@@ -95,25 +105,28 @@ class SQLiteExporter:
     def export(self, span: Span) -> None:
         with self._lock:
             with self._connect() as conn:
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT OR REPLACE INTO spans
                         (trace_id, span_id, parent_id, name,
                          start_time, end_time, duration_ms, status, attributes,
                          tenant_id, retention_class)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    span.trace_id,
-                    span.span_id,
-                    span.parent_id,
-                    span.name,
-                    span.start_time,
-                    span.end_time,
-                    span.duration_ms,
-                    span.status,
-                    json.dumps(span.attributes),
-                    span.tenant_id,
-                    span.retention_class,
-                ))
+                """,
+                    (
+                        span.trace_id,
+                        span.span_id,
+                        span.parent_id,
+                        span.name,
+                        span.start_time,
+                        span.end_time,
+                        span.duration_ms,
+                        span.status,
+                        json.dumps(span.attributes),
+                        span.tenant_id,
+                        span.retention_class,
+                    ),
+                )
 
     def query(self, sql: str, params: tuple = ()) -> list[dict]:
         with self._connect() as conn:
@@ -142,6 +155,7 @@ class HTTPExporter:
     Spans are upserted server-side on (project_id, span_id), so retries are
     idempotent and a span re-sent with end_time set will overwrite the open row.
     """
+
     _is_storage = True
 
     _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
@@ -277,6 +291,7 @@ def export_span(span: Span) -> None:
         if getattr(exporter, "_is_storage", False):
             if keep is None:
                 from .context import should_persist
+
                 keep = should_persist(span)
             if not keep:
                 continue

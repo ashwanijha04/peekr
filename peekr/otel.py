@@ -22,6 +22,7 @@ Requires ``opentelemetry-api`` and ``opentelemetry-sdk``. Install with::
 
     pip install "peekr[otel]"
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,9 @@ def _llm_attributes(span_dict: dict) -> dict:
     """Translate peekr span attributes → OpenInference semantic-conv attributes."""
     attrs = span_dict.get("attributes") or {}
     name = span_dict.get("name", "")
-    is_llm = name.startswith(("openai.", "anthropic.", "bedrock.", "gemini.", "google."))
+    is_llm = name.startswith(
+        ("openai.", "anthropic.", "bedrock.", "gemini.", "google.")
+    )
     out: dict[str, object] = {
         f"{_OI_PREFIX}.span.kind": "LLM" if is_llm else "CHAIN",
         "peekr.name": name,
@@ -45,10 +48,14 @@ def _llm_attributes(span_dict: dict) -> dict:
         out["llm.system"] = name.split(".", 1)[0]
     if (inp := attrs.get("input")) is not None:
         out["input.value"] = inp
-        out["input.mime_type"] = "application/json" if _looks_json(inp) else "text/plain"
+        out["input.mime_type"] = (
+            "application/json" if _looks_json(inp) else "text/plain"
+        )
     if (outp := attrs.get("output")) is not None:
         out["output.value"] = outp
-        out["output.mime_type"] = "application/json" if _looks_json(outp) else "text/plain"
+        out["output.mime_type"] = (
+            "application/json" if _looks_json(outp) else "text/plain"
+        )
     if (t := attrs.get("tokens_input")) is not None:
         out["llm.token_count.prompt"] = t
     if (t := attrs.get("tokens_output")) is not None:
@@ -93,6 +100,7 @@ class OTelExporter:
     service_name:
         Resource attribute. Defaults to ``"peekr"``.
     """
+
     _is_storage = True  # subject to sampling — see context.should_persist
 
     def __init__(
@@ -107,7 +115,7 @@ class OTelExporter:
         except ImportError as exc:
             raise ImportError(
                 "OTelExporter needs opentelemetry-api / opentelemetry-sdk. "
-                "Install with `pip install \"peekr[otel]\"`."
+                'Install with `pip install "peekr[otel]"`.'
             ) from exc
 
         if tracer is None and endpoint is not None:
@@ -127,7 +135,9 @@ class OTelExporter:
             OTLPSpanExporter,
         )
 
-        provider = TracerProvider(resource=Resource.create({"service.name": service_name}))
+        provider = TracerProvider(
+            resource=Resource.create({"service.name": service_name})
+        )
         provider.add_span_processor(
             BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, headers=headers))
         )
@@ -160,7 +170,9 @@ class OTelExporter:
             attributes={k: _stringify(v) for k, v in attrs.items()},
         )
         if d.get("status") == "error":
-            otel_span.set_status(Status(StatusCode.ERROR, attrs.get("exception.message", "")))
+            otel_span.set_status(
+                Status(StatusCode.ERROR, attrs.get("exception.message", ""))
+            )
         else:
             otel_span.set_status(Status(StatusCode.OK))
 
@@ -170,9 +182,11 @@ class OTelExporter:
         # Root span: free children we tracked for this trace.
         if parent_id is None:
             self._open = {
-                sid: s for sid, s in self._open.items()
+                sid: s
+                for sid, s in self._open.items()
                 if getattr(s, "context", None) is None
-                or getattr(s.context, "trace_id", None) != getattr(otel_span.context, "trace_id", None)
+                or getattr(s.context, "trace_id", None)
+                != getattr(otel_span.context, "trace_id", None)
             }
 
 

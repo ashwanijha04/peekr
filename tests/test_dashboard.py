@@ -72,28 +72,31 @@ def _make_corpus():
         score = 0.9 - (i * 0.07)  # 0.9 → 0.27
         spans.append(_llm_span(f"t{i:02d}", t0 + i, score=score, rubric=0.8))
     # one detailed span with verdicts
-    spans.append(_llm_span(
-        "tdet",
-        t0 + 11,
-        score=0.5,
-        details={
-            "claims": [
-                {"text": "A is true", "verdict": "supported"},
-                {"text": "B is invented", "verdict": "contradicted"},
-            ],
-            "supported": 1,
-            "contradicted": 1,
-            "unsupported": 0,
-            "total": 2,
-            "score": 0.5,
-        },
-    ))
+    spans.append(
+        _llm_span(
+            "tdet",
+            t0 + 11,
+            score=0.5,
+            details={
+                "claims": [
+                    {"text": "A is true", "verdict": "supported"},
+                    {"text": "B is invented", "verdict": "contradicted"},
+                ],
+                "supported": 1,
+                "contradicted": 1,
+                "unsupported": 0,
+                "total": 2,
+                "score": 0.5,
+            },
+        )
+    )
     return spans
 
 
 # ---------------------------------------------------------------------------
 # Unit-level data prep
 # ---------------------------------------------------------------------------
+
 
 class TestDataPrep:
     def test_series_flattens_eval_scores(self):
@@ -122,7 +125,7 @@ class TestDataPrep:
         spans = _make_corpus()
         d = _drift(spans)["Hallucination"]
         assert d is not None
-        assert d["current"] < d["baseline"]   # downward drift
+        assert d["current"] < d["baseline"]  # downward drift
         assert d["delta"] < 0
 
     def test_drift_returns_none_below_threshold(self):
@@ -162,6 +165,7 @@ class TestDataPrep:
 # ---------------------------------------------------------------------------
 # End-to-end: produce HTML file from a JSONL trace
 # ---------------------------------------------------------------------------
+
 
 class TestGenerate:
     def test_generates_self_contained_html(self, tmp_path):
@@ -203,10 +207,22 @@ class TestGenerate:
         out_path = tmp_path / "dashboard.html"
         generate_dashboard(str(traces_path), output=str(out_path))
         html = out_path.read_text()
-        for key in ('"rows"', '"channels"', '"narrative"', '"channel_heatmap"', '"thresholds"'):
+        for key in (
+            '"rows"',
+            '"channels"',
+            '"narrative"',
+            '"channel_heatmap"',
+            '"thresholds"',
+        ):
             assert key in html, f"missing payload key: {key}"
         # Filter chip / hero / offender mount points
-        for marker in ("filter-bar", "hero", "narrative-list", "offender-list", "heatmaps"):
+        for marker in (
+            "filter-bar",
+            "hero",
+            "narrative-list",
+            "offender-list",
+            "heatmaps",
+        ):
             assert marker in html, f"missing UI mount: {marker}"
 
 
@@ -214,14 +230,25 @@ class TestGenerate:
 # Rich payload helpers
 # ---------------------------------------------------------------------------
 
+
 class TestRichPayload:
     def test_rows_includes_per_span_record(self):
         spans = _make_corpus()
         rows = _rows(spans)
         assert len(rows) == len(spans)
         first = rows[0]
-        for k in ("trace_id", "span_id", "ts", "model", "tenant", "endpoint",
-                  "Hallucination", "Rubric", "input", "output"):
+        for k in (
+            "trace_id",
+            "span_id",
+            "ts",
+            "model",
+            "tenant",
+            "endpoint",
+            "Hallucination",
+            "Rubric",
+            "input",
+            "output",
+        ):
             assert k in first
         # Tenant comes from attributes.user_id (peekr's session machinery)
         assert first["tenant"] == "acme"
@@ -241,7 +268,11 @@ class TestRichPayload:
         spans = _make_corpus()
         hm = _channel_heatmap(spans, n_buckets=4)
         assert len(hm["buckets"]) == 4
-        assert "model" in hm["grids"] and "tenant" in hm["grids"] and "endpoint" in hm["grids"]
+        assert (
+            "model" in hm["grids"]
+            and "tenant" in hm["grids"]
+            and "endpoint" in hm["grids"]
+        )
         for grid in hm["grids"].values():
             for row in grid:
                 assert len(row["cells"]) == 4
@@ -262,7 +293,11 @@ class TestRichPayload:
         assert n["health"]["tier"] in ("good", "ok", "warning", "critical")
         # Corpus trends down, so the narrative should mention the drop
         joined = " ".join(n["insights"])
-        assert "regress" in joined.lower() or "drop" in joined.lower() or "dropped" in joined.lower()
+        assert (
+            "regress" in joined.lower()
+            or "drop" in joined.lower()
+            or "dropped" in joined.lower()
+        )
 
     def test_narrative_handles_no_scores(self):
         # Strip eval_scores from every span
@@ -271,4 +306,7 @@ class TestRichPayload:
             (s["attributes"]).pop("eval_scores", None)
         n = _narrative(spans)
         assert n["health"] is None
-        assert any("no Hallucination scores" in i.lower() or "no hallucination" in i.lower() for i in n["insights"])
+        assert any(
+            "no Hallucination scores" in i.lower() or "no hallucination" in i.lower()
+            for i in n["insights"]
+        )

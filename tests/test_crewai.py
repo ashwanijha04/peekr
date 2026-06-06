@@ -4,6 +4,7 @@ so we build a tiny fake `crewai` module on the fly that exposes `Crew`,
 `Agent` and `Task` classes with the methods we patch, then run the real
 `patch_crewai()` against it.
 """
+
 from __future__ import annotations
 import sys
 import types
@@ -84,12 +85,14 @@ def test_no_crewai_installed_is_noop(isolated_exporters):
     """patch_crewai() must not raise when crewai is missing."""
     sys.modules.pop("crewai", None)
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()  # should silently return
     assert isolated_exporters.spans == []
 
 
 def test_kickoff_emits_span(fake_crewai, isolated_exporters):
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()
 
     agent = fake_crewai.Agent(role="planner")
@@ -109,6 +112,7 @@ def test_kickoff_emits_span(fake_crewai, isolated_exporters):
 def test_full_span_tree(fake_crewai, isolated_exporters):
     """A kickoff fans out into task.execute → agent.execute_task; spans nest."""
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()
 
     agent = fake_crewai.Agent(role="researcher")
@@ -135,11 +139,14 @@ def test_full_span_tree(fake_crewai, isolated_exporters):
 
 def test_agent_error_marks_span(fake_crewai, isolated_exporters):
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()
 
     agent = fake_crewai.Agent(role="x")
+
     def broken(self, task, *a, **k):
         raise RuntimeError("LLM down")
+
     type(agent).execute_task = broken  # patched method already applied to class
 
     # Re-apply since we replaced execute_task at the class level.
@@ -149,8 +156,9 @@ def test_agent_error_marks_span(fake_crewai, isolated_exporters):
     with pytest.raises(RuntimeError):
         agent.execute_task(task)
 
-    err_spans = [s for s in isolated_exporters.spans
-                 if s.name == "crewai.agent.execute_task"]
+    err_spans = [
+        s for s in isolated_exporters.spans if s.name == "crewai.agent.execute_task"
+    ]
     assert err_spans, "expected an agent.execute_task span"
     assert err_spans[0].status == "error"
     assert "LLM down" in err_spans[0].attributes["error"]
@@ -159,19 +167,22 @@ def test_agent_error_marks_span(fake_crewai, isolated_exporters):
 def test_patch_is_idempotent(fake_crewai, isolated_exporters):
     """Calling patch_crewai twice must not double-wrap (one kickoff = one span)."""
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()
     patch_crewai()
 
     crew = fake_crewai.Crew(agents=[], tasks=[])
     crew.kickoff()
 
-    kickoff_spans = [s for s in isolated_exporters.spans
-                     if s.name == "crewai.crew.kickoff"]
+    kickoff_spans = [
+        s for s in isolated_exporters.spans if s.name == "crewai.crew.kickoff"
+    ]
     assert len(kickoff_spans) == 1
 
 
 def test_patched_methods_marked(fake_crewai):
     from peekr.patches.crewai_patch import patch_crewai
+
     patch_crewai()
     assert getattr(fake_crewai.Crew.kickoff, "_peekr_patched", False)
     assert getattr(fake_crewai.Agent.execute_task, "_peekr_patched", False)
