@@ -134,6 +134,7 @@ class TestFix3ExporterOrder:
             storage="jsonl",
             jsonl_path=jsonl_path,
             evaluators=[_FakeEval(0.42)],
+            async_eval=False,  # assertions read the span/file immediately
         )
 
         # EvalExporter must come BEFORE JSONLExporter in the registry.
@@ -241,6 +242,7 @@ class TestFix5SpanFilter:
         should only evaluate the /api/qa span, leaving the others untouched."""
         ev = _FakeEval(0.9, name_override="fake")
         exporter = EvalExporter(
+            async_eval=False,
             evaluators=[ev],
             span_filter=lambda s: (s.attributes or {}).get("endpoint") == "/api/qa",
         )
@@ -263,6 +265,7 @@ class TestFix5SpanFilter:
 
     def test_faulty_filter_does_not_break_tracing(self):
         exporter = EvalExporter(
+            async_eval=False,
             evaluators=[_FakeEval(1.0)],
             span_filter=lambda s: 1 / 0,  # always raises
         )
@@ -272,7 +275,7 @@ class TestFix5SpanFilter:
         assert "eval_scores" not in s.attributes
 
     def test_no_filter_evaluates_every_llm_span_as_before(self):
-        exporter = EvalExporter(evaluators=[_FakeEval(0.5, "ok")])
+        exporter = EvalExporter(async_eval=False, evaluators=[_FakeEval(0.5, "ok")])
         s = Span(name="anthropic.messages", trace_id="t")
         s.finish()
         exporter.export(s)

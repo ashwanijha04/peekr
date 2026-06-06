@@ -104,7 +104,7 @@ class _ConstantEvaluator(BaseEvaluator):
 class TestEvalExporter:
     def test_scores_added_to_llm_span(self):
         evaluator = _ConstantEvaluator(score=0.9)
-        exporter = EvalExporter(evaluators=[evaluator])
+        exporter = EvalExporter(async_eval=False, evaluators=[evaluator])
         span = make_llm_span()
         exporter.export(span)
         assert "eval_scores" in span.attributes
@@ -112,21 +112,21 @@ class TestEvalExporter:
 
     def test_non_llm_span_is_skipped(self):
         evaluator = _ConstantEvaluator()
-        exporter = EvalExporter(evaluators=[evaluator])
+        exporter = EvalExporter(async_eval=False, evaluators=[evaluator])
         span = make_non_llm_span()
         exporter.export(span)
         assert "eval_scores" not in span.attributes
 
     def test_anthropic_span_is_evaluated(self):
         evaluator = _ConstantEvaluator(score=1.0)
-        exporter = EvalExporter(evaluators=[evaluator])
+        exporter = EvalExporter(async_eval=False, evaluators=[evaluator])
         span = make_llm_span(name="anthropic.messages")
         exporter.export(span)
         assert span.attributes["eval_scores"]["ConstantEval"] == pytest.approx(1.0)
 
     def test_bedrock_span_is_evaluated(self):
         evaluator = _ConstantEvaluator(score=0.5)
-        exporter = EvalExporter(evaluators=[evaluator])
+        exporter = EvalExporter(async_eval=False, evaluators=[evaluator])
         span = make_llm_span(name="bedrock.invoke_model")
         exporter.export(span)
         assert span.attributes["eval_scores"]["ConstantEval"] == pytest.approx(0.5)
@@ -134,7 +134,7 @@ class TestEvalExporter:
     def test_multiple_evaluators_all_run(self):
         e1 = _ConstantEvaluator(score=0.8, name_override="Eval1")
         e2 = _ConstantEvaluator(score=0.4, name_override="Eval2")
-        exporter = EvalExporter(evaluators=[e1, e2])
+        exporter = EvalExporter(async_eval=False, evaluators=[e1, e2])
         span = make_llm_span()
         exporter.export(span)
         scores = span.attributes["eval_scores"]
@@ -155,7 +155,7 @@ class TestEvalExporter:
             def evaluate(self, span):
                 raise RuntimeError("boom")
 
-        exporter = EvalExporter(evaluators=[BrokenEvaluator()])
+        exporter = EvalExporter(async_eval=False, evaluators=[BrokenEvaluator()])
         span = make_llm_span()
         exporter.export(span)
         assert "BrokenEval" not in (span.attributes.get("eval_scores") or {})
@@ -181,7 +181,7 @@ class TestInEvalGuard:
                 call_count += 1
                 return 1.0
 
-        exporter = EvalExporter(evaluators=[CountingEvaluator()])
+        exporter = EvalExporter(async_eval=False, evaluators=[CountingEvaluator()])
         span = make_llm_span()
 
         # Simulate being inside an eval call already
@@ -196,7 +196,7 @@ class TestInEvalGuard:
 
     def test_in_eval_resets_after_export(self):
         """_in_eval must be False after a normal EvalExporter.export() call."""
-        exporter = EvalExporter(evaluators=[_ConstantEvaluator()])
+        exporter = EvalExporter(async_eval=False, evaluators=[_ConstantEvaluator()])
         span = make_llm_span()
         exporter.export(span)
         assert _in_eval.get() is False
@@ -212,7 +212,7 @@ class TestInEvalGuard:
             def evaluate(self, span: Span) -> float:
                 raise RuntimeError("unexpected")
 
-        exporter = EvalExporter(evaluators=[AlwaysRaises()])
+        exporter = EvalExporter(async_eval=False, evaluators=[AlwaysRaises()])
         span = make_llm_span()
         # Should not raise (errors are caught per-evaluator)
         exporter.export(span)
@@ -429,7 +429,7 @@ class TestHallucination:
 
         with patch("peekr.eval._judge.openai") as mock_openai:
             mock_openai.chat.completions.create.return_value = mock_response
-            exporter = EvalExporter(evaluators=[Hallucination()])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination()])
             span = make_llm_span(input_text="The sky is blue.", output="The sky is green.")
             exporter.export(span)
 
@@ -520,9 +520,60 @@ class TestHallucinationDetailed:
                 {"text": "A", "verdict": "supported"},
                 {"text": "B", "verdict": "unsupported"},
             ])
-            exporter = EvalExporter(evaluators=[Hallucination(detailed=True)])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(detailed=True)])
             span = make_llm_span(input_text="ctx", output="out")
             exporter.export(span)
 
         assert span.attributes["eval_scores"]["Hallucination"] == pytest.approx(0.5)
         assert span.attributes["hallucination_details"]["total"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Async eval path — background scoring + flush + re-export to storage
+# ---------------------------------------------------------------------------
+
+class TestAsyncEval:
+    def test_async_scores_reach_storage_after_flush(self):
+        """The async worker must re-export the scored span through storage
+        exporters. (Regression: a broken relative import made every
+        background eval die with ImportError inside its Future, silently
+        dropping the scores it had just computed.)"""
+        from peekr.exporters import _exporters
+
+        collected = []
+
+        class Collector:
+            _is_storage = True
+
+            def export(self, span):
+                collected.append(span)
+
+        saved = list(_exporters)
+        _exporters[:] = [Collector()]
+        try:
+            exporter = EvalExporter(evaluators=[_ConstantEvaluator(score=0.7, name_override="bg")])
+            span = make_llm_span()
+            exporter.export(span)
+            exporter.flush(timeout=10)
+        finally:
+            _exporters[:] = saved
+
+        assert collected, "async eval must re-export the scored span to storage"
+        assert collected[-1].attributes["eval_scores"]["bg"] == pytest.approx(0.7)
+        # The original span object is untouched — async scores live on the
+        # re-exported copy (storage upserts on span_id).
+        assert "eval_scores" not in span.attributes
+
+    def test_flush_noop_when_nothing_pending(self):
+        exporter = EvalExporter(evaluators=[_ConstantEvaluator(score=0.5)])
+        exporter.flush(timeout=1)  # must not raise or hang
+
+    def test_async_worker_failures_do_not_leak_to_caller(self):
+        class Boom(BaseEvaluator):
+            def evaluate(self, span):
+                raise RuntimeError("judge down")
+
+        exporter = EvalExporter(evaluators=[Boom()])
+        span = make_llm_span()
+        exporter.export(span)  # must not raise
+        exporter.flush(timeout=10)

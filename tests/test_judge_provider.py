@@ -217,7 +217,7 @@ class TestEvalExporterDistinguishesCrashFromZero:
     def test_crash_records_eval_errors_not_zero_score(self):
         """The main fix: a judge exception must NOT show up as 'fully
         hallucinated' on the dashboard."""
-        exporter = EvalExporter(evaluators=[_CrashingEvaluator()])
+        exporter = EvalExporter(async_eval=False, evaluators=[_CrashingEvaluator()])
         s = Span(name="openai.chat.completions", trace_id="t")
         s.attributes["output"] = "real answer"
         s.finish()
@@ -234,7 +234,7 @@ class TestEvalExporterDistinguishesCrashFromZero:
     def test_real_zero_score_still_recorded(self):
         """We must not break the case where the evaluator legitimately
         returns 0.0 — that's a meaningful score, not an error."""
-        exporter = EvalExporter(evaluators=[_ConstantEvaluator(score=0.0, name_override="legit_zero")])
+        exporter = EvalExporter(async_eval=False, evaluators=[_ConstantEvaluator(score=0.0, name_override="legit_zero")])
         s = Span(name="openai.chat.completions", trace_id="t")
         s.attributes["output"] = "garbage"
         s.finish()
@@ -246,6 +246,7 @@ class TestEvalExporterDistinguishesCrashFromZero:
         """If two evaluators are configured and one crashes, the other's
         score must still be recorded."""
         exporter = EvalExporter(
+            async_eval=False,
             evaluators=[_CrashingEvaluator(), _ConstantEvaluator(score=0.9, name_override="ok")]
         )
         s = Span(name="anthropic.messages", trace_id="t")

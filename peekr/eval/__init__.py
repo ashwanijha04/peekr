@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import abc
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait as _futures_wait
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -43,8 +45,9 @@ class EvalExporter:
         spans for which the filter returns truthy.
     async_eval
         If True (default), evaluations run on a background thread — zero
-        latency to the caller. Set False to run synchronously (useful in
-        scripts that exit immediately after the LLM call).
+        latency to the caller. Set False to run synchronously, or call
+        `flush()` before exit (useful in scripts that exit immediately
+        after the LLM call).
     """
 
     def __init__(
@@ -58,9 +61,8 @@ class EvalExporter:
         self.async_eval = async_eval
         # Shared thread pool — evaluators are I/O bound (LLM calls)
         # so a larger pool is fine; 4 concurrent judge calls is plenty
-        self._pool = __import__("concurrent.futures", fromlist=["ThreadPoolExecutor"]).ThreadPoolExecutor(
-            max_workers=4, thread_name_prefix="peekr-eval"
-        )
+        self._pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="peekr-eval")
+        self._pending: set = set()  # in-flight background evals — see flush()
         self._is_eval_exporter = True  # lets storage exporters identify us
 
     def export(self, span: Span) -> None:
@@ -91,9 +93,22 @@ class EvalExporter:
             import copy
             span_copy = copy.copy(span)
             span_copy.attributes = dict(span.attributes or {})
-            self._pool.submit(self._run_eval_and_patch, span_copy)
+            fut = self._pool.submit(self._run_eval_and_patch, span_copy)
+            self._pending.add(fut)
+            fut.add_done_callback(self._pending.discard)
         else:
             self._run_eval_sync(span)
+
+    def flush(self, timeout: Optional[float] = None) -> None:
+        """Block until queued background evaluations finish.
+
+        Call before process exit in short-lived scripts (and in tests) so
+        async scores reach storage. No-op when async_eval=False or when
+        nothing is in flight.
+        """
+        pending = set(self._pending)
+        if pending:
+            _futures_wait(pending, timeout=timeout)
 
     def _run_eval_sync(self, span: Span) -> None:
         """Run all evaluators synchronously and write scores directly to span."""
@@ -144,7 +159,11 @@ class EvalExporter:
             # Re-export span with scores now attached.
             # Use only storage exporters (JSONL, SQLite, HTTP) — skip
             # eval/alert exporters to avoid infinite recursion.
-            from .exporters import _exporters
+            # NB: ..exporters (package root), NOT .exporters — peekr.eval has
+            # no exporters module, and the bare relative import made every
+            # background eval die with ImportError inside its Future, silently
+            # dropping the scores it had just computed.
+            from ..exporters import _exporters
             for exporter in list(_exporters):
                 if isinstance(exporter, EvalExporter):
                     continue

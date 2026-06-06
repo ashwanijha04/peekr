@@ -11,8 +11,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# Stub out optional SDK modules so tests run without installing them.
-# These stubs must be in sys.modules BEFORE peekr.replay is imported.
+# Stub out SDK modules so replay never constructs real clients (which raise
+# on missing API keys at construction time in current SDK versions).
+#
+# sys.modules.setdefault is NOT enough here: in a full-suite run the real
+# openai/anthropic modules are already imported by earlier test files, so the
+# stubs silently lose and replay hits real clients. The autouse fixture below
+# force-installs the stubs per test via monkeypatch, which also restores the
+# real modules afterwards so other test files are unaffected.
 # ---------------------------------------------------------------------------
 
 def _make_openai_stub():
@@ -22,29 +28,32 @@ def _make_openai_stub():
     completions.create = MagicMock()
     chat.completions = completions
     mod.chat = chat
-    sys.modules.setdefault("openai", mod)
-    sys.modules.setdefault("openai.chat", chat)
-    sys.modules.setdefault("openai.chat.completions", completions)
     return mod
 
 
 def _make_anthropic_stub():
     mod = types.ModuleType("anthropic")
     mod.Anthropic = MagicMock()
-    sys.modules.setdefault("anthropic", mod)
     return mod
 
 
 def _make_boto3_stub():
     mod = types.ModuleType("boto3")
     mod.client = MagicMock()
-    sys.modules.setdefault("boto3", mod)
     return mod
 
 
 _openai_stub = _make_openai_stub()
 _anthropic_stub = _make_anthropic_stub()
 _boto3_stub = _make_boto3_stub()
+
+
+@pytest.fixture(autouse=True)
+def _stub_llm_sdks(monkeypatch):
+    monkeypatch.setitem(sys.modules, "openai", _openai_stub)
+    monkeypatch.setitem(sys.modules, "anthropic", _anthropic_stub)
+    monkeypatch.setitem(sys.modules, "boto3", _boto3_stub)
+
 
 from peekr.exporters import _exporters
 from peekr.replay import load_trace, replay_trace

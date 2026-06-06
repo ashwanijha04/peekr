@@ -123,7 +123,7 @@ class TestCitationAccuracy:
     def test_integration_via_eval_exporter(self):
         s = _span("BERT is a transformer.",
                   "BERT was introduced in arXiv:9999.99999 by Smith et al. 2025.")
-        exporter = EvalExporter(evaluators=[CitationAccuracy()])
+        exporter = EvalExporter(async_eval=False, evaluators=[CitationAccuracy()])
         exporter.export(s)
         assert s.attributes["eval_scores"]["CitationAccuracy"] == pytest.approx(0.0)
 
@@ -152,7 +152,7 @@ class TestComposedSignals:
         mock_resp.choices[0].message.content = "0.4"
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.return_value = mock_resp
-            exporter = EvalExporter(evaluators=[Hallucination(), CitationAccuracy()])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(), CitationAccuracy()])
             exporter.export(s)
 
         scores = s.attributes["eval_scores"]

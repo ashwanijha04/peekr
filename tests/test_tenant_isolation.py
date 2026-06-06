@@ -59,7 +59,7 @@ class TestEvalScoreIsolation:
                 MagicMock(choices=[MagicMock(message=MagicMock(content="0.10"))]),
                 MagicMock(choices=[MagicMock(message=MagicMock(content="0.90"))]),
             ]
-            exporter = EvalExporter(evaluators=[Hallucination()])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination()])
             exporter.export(s_a)
             exporter.export(s_b)
 
@@ -84,7 +84,7 @@ class TestEvalScoreIsolation:
         ]
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = responses
-            exporter = EvalExporter(evaluators=[Hallucination(detailed=True)])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination(detailed=True)])
             exporter.export(s_a)
             exporter.export(s_b)
 
@@ -123,7 +123,7 @@ class TestConcurrentTenants:
         with patch("peekr.eval._judge.openai") as mock_oai:
             mock_oai.chat.completions.create.side_effect = judge
 
-            exporter = EvalExporter(evaluators=[Hallucination()])
+            exporter = EvalExporter(async_eval=False, evaluators=[Hallucination()])
             threads = [threading.Thread(target=exporter.export, args=(s,)) for s in spans]
             for t in threads: t.start()
             for t in threads: t.join()

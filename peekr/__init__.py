@@ -46,6 +46,7 @@ def instrument(
     alerts: list = None,
     evaluators: list = None,
     evaluate_filter=None,
+    async_eval: bool = True,
     guardrails: list = None,
     compliance=None,  # None = auto-discover from dashboard | ["HIPAA"] = explicit | [] = disable
     tenant_id: str | None = None,
@@ -68,6 +69,11 @@ def instrument(
 
     alerts=[...]        → fire callbacks when thresholds are crossed
     evaluators=[...]    → score LLM outputs after each call
+    async_eval=False    → run evaluators synchronously in the export path
+                          (default True = background thread, zero caller
+                          latency; short-lived scripts should either set
+                          False or call the EvalExporter's flush() before
+                          exiting so scores reach storage)
     guardrails=[...]    → enforce rules on inputs/outputs; may raise GuardrailError
 
     Guardrail pipeline order (ensures PII-free storage and auditable blocks):
@@ -132,7 +138,7 @@ def instrument(
     # 3) Evaluators — scores written to span.attributes["eval_scores"].
     if evaluators:
         from .eval import EvalExporter
-        add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter))
+        add_exporter(EvalExporter(evaluators, span_filter=evaluate_filter, async_eval=async_eval))
 
     # 4) Alerts.
     if alerts:
