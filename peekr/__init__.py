@@ -1,6 +1,6 @@
 from __future__ import annotations
 from .exporters import (
-    add_exporter, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
+    add_exporter, clear_exporters, JSONLExporter, ConsoleExporter, SQLiteExporter, HTTPExporter,
 )
 from .otel import OTelExporter
 from .context import (
@@ -62,6 +62,9 @@ def instrument(
     storage="jsonl"     → write to traces.jsonl (default)
     storage="sqlite"    → write to traces.db (multi-process safe, queryable)
     storage="both"      → write to both
+    jsonl_path=None     → disable JSONL storage (likewise db_path=None for
+                          SQLite). Passing exporter=... also suppresses the
+                          default storage pipeline entirely.
 
     alerts=[...]        → fire callbacks when thresholds are crossed
     evaluators=[...]    → score LLM outputs after each call
@@ -172,12 +175,14 @@ def instrument(
             guardrails = [_cg] + list(guardrails or [])
 
     # 5) Storage — span is fully annotated (redacted + scored) by now.
+    # A None path disables that backend; JSONLExporter(None)/SQLiteExporter(None)
+    # would otherwise raise on every span export.
     if exporter:
         add_exporter(exporter)
     else:
-        if storage in ("jsonl", "both"):
+        if storage in ("jsonl", "both") and jsonl_path is not None:
             add_exporter(JSONLExporter(jsonl_path))
-        if storage in ("sqlite", "both"):
+        if storage in ("sqlite", "both") and db_path is not None:
             add_exporter(SQLiteExporter(db_path))
 
     # 6) Blocking guardrails LAST — raise after storage so violations persist.
@@ -205,7 +210,8 @@ __all__ = [
     "instrument", "trace", "session",
     "start_span", "end_span", "get_current_span",
     # exporters
-    "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter", "add_exporter",
+    "JSONLExporter", "ConsoleExporter", "SQLiteExporter", "HTTPExporter",
+    "add_exporter", "clear_exporters",
     "OTelExporter",
     # features
     "feedback", "export_feedback",

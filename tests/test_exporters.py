@@ -68,3 +68,41 @@ def test_export_span_dispatches_to_all():
     add_exporter(FakeExporter())
     export_span(make_span("dispatched"))
     assert collected == ["dispatched", "dispatched"]
+
+
+def test_clear_exporters_public_api():
+    """clear_exporters() empties the registry — no private _exporters poking."""
+    from peekr.exporters import clear_exporters as clear_fn
+
+    add_exporter(ConsoleExporter())
+    add_exporter(ConsoleExporter())
+    assert len(_exporters) == 2
+    clear_fn()
+    assert _exporters == []
+    # Also exported at package top level.
+    import peekr
+
+    assert peekr.clear_exporters is clear_fn
+
+
+def test_instrument_none_path_disables_storage(tmp_path):
+    """jsonl_path=None / db_path=None must not register broken exporters.
+
+    JSONLExporter(None) raises TypeError on every span export, so a None
+    path means "this backend is disabled".
+    """
+    from peekr import instrument
+
+    instrument(console=False, jsonl_path=None)
+    assert not any(isinstance(e, JSONLExporter) for e in _exporters)
+
+    _exporters.clear()
+    from peekr.exporters import SQLiteExporter
+
+    instrument(console=False, storage="both", jsonl_path=None, db_path=None)
+    assert not any(isinstance(e, (JSONLExporter, SQLiteExporter)) for e in _exporters)
+
+    # A real path still registers normally.
+    _exporters.clear()
+    instrument(console=False, jsonl_path=str(tmp_path / "traces.jsonl"))
+    assert any(isinstance(e, JSONLExporter) for e in _exporters)

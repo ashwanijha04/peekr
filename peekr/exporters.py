@@ -257,6 +257,17 @@ def add_exporter(exporter) -> None:
     _exporters.append(exporter)
 
 
+def clear_exporters() -> None:
+    """Remove every registered exporter.
+
+    The registry is process-global, so anything that re-instruments —
+    tests, notebooks, libraries embedding peekr — accumulates exporters
+    otherwise, and stale ones keep receiving every span. Call this before
+    re-instrumenting (or in test teardown) to start from a clean slate.
+    """
+    _exporters.clear()
+
+
 def export_span(span: Span) -> None:
     # Mutators (EvalExporter, AlertExporter) always run — they need every
     # span to compute correct eval scores and alert rates. Storage exporters
