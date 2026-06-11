@@ -92,6 +92,14 @@ def patch_anthropic():
     original_create = Messages.create
 
     def patched_create(self, *args, **kwargs):
+        try:
+            from ..eval import _in_eval as _peekr_eval_guard
+
+            if _peekr_eval_guard.get():
+                return original_create(self, *args, **kwargs)
+        except Exception:
+            pass
+
         span, token = start_span("anthropic.messages")
         span.attributes["model"] = kwargs.get("model", "unknown")
         # Tag judge-LLM spans so the dashboard can hide them. The recursion
@@ -183,6 +191,14 @@ def patch_anthropic():
         original_async_create = AsyncMessages.create
 
         async def patched_async_create(self, *args, **kwargs):
+            try:
+                from ..eval import _in_eval as _peekr_eval_guard
+
+                if _peekr_eval_guard.get():
+                    return await original_async_create(self, *args, **kwargs)
+            except Exception:
+                pass
+
             span, token = start_span("anthropic.messages")
             span.attributes["model"] = kwargs.get("model", "unknown")
             try:

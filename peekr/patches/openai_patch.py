@@ -145,6 +145,16 @@ class _AsyncOpenAIStreamWrapper:
 
 def _make_chat_patch(original):
     def patched(self_or_first, *args, **kwargs):
+        # Skip tracing peekr's own judge calls — prevents self-referential spans
+        # in the storage backend and the 38-call cascade seen in memory agents.
+        try:
+            from ..eval import _in_eval as _peekr_eval_guard
+
+            if _peekr_eval_guard.get():
+                return original(self_or_first, *args, **kwargs)
+        except Exception:
+            pass
+
         # Works for both bound (instance) and unbound calls
         if callable(getattr(self_or_first, "model", None)):
             # called as unbound — self_or_first IS the instance
@@ -204,6 +214,14 @@ def _make_chat_patch(original):
 
 def _make_async_chat_patch(original):
     async def patched(self_client, *args, **kwargs):
+        try:
+            from ..eval import _in_eval as _peekr_eval_guard
+
+            if _peekr_eval_guard.get():
+                return await original(self_client, *args, **kwargs)
+        except Exception:
+            pass
+
         span, token = start_span("openai.chat.completions")
         span.attributes["model"] = kwargs.get("model", "unknown")
         _mark_eval_span(span)
