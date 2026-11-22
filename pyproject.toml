@@ -74,6 +74,7 @@ Homepage = "https://peekr.starkspherelabs.com"
 Documentation = "https://peekr.starkspherelabs.com/docs"
 Repository = "https://github.com/ashwanijha04/peekr"
 Changelog = "https://github.com/ashwanijha04/peekr/blob/main/README.md#changelog"
+"Built by" = "https://www.starkspherelabs.com"
 
 [project.scripts]
 peekr = "peekr.cli:main"

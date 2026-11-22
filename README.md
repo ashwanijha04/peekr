@@ -623,4 +623,6 @@ Open an issue before large changes. PRs welcome.
 
 [Website](https://peekr.starkspherelabs.com) · [Docs](https://peekr.starkspherelabs.com/docs) · [PyPI](https://pypi.org/project/peekr/) · [TypeScript SDK](peekr-ts/README.md) · MIT License
 
+<sub>Built by <a href="https://www.starkspherelabs.com">StarkSphere Labs</a>, an applied AI company in Dubai.</sub>
+
 </div>
